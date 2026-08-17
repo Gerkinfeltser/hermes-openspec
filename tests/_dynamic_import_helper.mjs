@@ -492,6 +492,111 @@ if (__test) {
   } catch (e) {
     results.__testError = e.message
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // Lane override behavior tests
+  // ═══════════════════════════════════════════════════════════════════════════════
+  try {
+    var SO = ['todo', 'in-progress', 'done']
+
+    // 1. computeCollapsedSet
+    results.collapsedSet = {}
+    if (__test.computeCollapsedSet) {
+      var auto = { todo: true } // todo empty, in-progress & done have work
+      var empty = __test.computeCollapsedSet(auto, {}, SO)
+      results.collapsedSet.autoOnlyEmpty = empty.todo === true
+      results.collapsedSet.autoOnlyPopulated = empty['in-progress'] === false
+      var withOverride = __test.computeCollapsedSet(auto, { todo: false }, SO)
+      results.collapsedSet.overrideEmpty = withOverride.todo === false
+      var withOverrideFull = __test.computeCollapsedSet(auto, { 'in-progress': true }, SO)
+      results.collapsedSet.overridePopulated = withOverrideFull['in-progress'] === true
+    }
+
+    // 2. toggleOverride
+    results.toggle = {}
+    if (__test.toggleOverride) {
+      var autoMap = { todo: true } // todo is auto-collapsed (empty lane)
+      var t1 = __test.toggleOverride({}, 'todo', autoMap)
+      results.toggle.firstToggleEmpty = t1.todo
+      var t2 = __test.toggleOverride(t1, 'todo', autoMap)
+      results.toggle.secondToggleEmpty = t2.todo
+
+      var autoMapFull = { 'in-progress': false } // in-progress is auto-expanded (has work)
+      var t3 = __test.toggleOverride({}, 'in-progress', autoMapFull)
+      results.toggle.firstTogglePopulated = t3['in-progress']
+      var t4 = __test.toggleOverride(t3, 'in-progress', autoMapFull)
+      results.toggle.secondTogglePopulated = t4['in-progress']
+    }
+
+    // 3. computeLanePhase
+    results.lanePhase = {}
+    if (__test.computeLanePhase) {
+      var g1 = { todo: [], 'in-progress': [{x:1}], done: [] }
+      results.lanePhase.empty = __test.computeLanePhase(g1, ['todo', 'in-progress', 'done'])
+      var g2 = { todo: [{x:1}], 'in-progress': [], done: [{x:1}] }
+      results.lanePhase.full = __test.computeLanePhase(g2, ['todo', 'in-progress', 'done'])
+      results.lanePhase.nullGrouped = __test.computeLanePhase(null, SO)
+    }
+
+    // 4. pruneStaleOverrides
+    results.prune = {}
+    if (__test.pruneStaleOverrides) {
+      // Phase changed on override lane → pruned
+      var prev1 = 'todo:empty|in-progress:full|done:empty'
+      var cur1 = 'todo:full|in-progress:full|done:empty'  // todo flipped empty→full
+      var pruned1 = __test.pruneStaleOverrides({ todo: false, done: true }, prev1, cur1)
+      results.prune.changedLanePruned = pruned1.todo === undefined && pruned1.done === true
+
+      // Phase unchanged → kept
+      var prev2 = 'todo:empty|in-progress:full|done:empty'
+      var cur2 = 'todo:empty|in-progress:full|done:empty'
+      var pruned2 = __test.pruneStaleOverrides({ todo: false }, prev2, cur2)
+      results.prune.unchangedLaneKept = pruned2.todo === false
+
+      // Phase changed but no override → harmless
+      var prev3 = 'todo:empty|in-progress:full'
+      var cur3 = 'todo:full|in-progress:full'
+      var pruned3 = __test.pruneStaleOverrides({}, prev3, cur3)
+      results.prune.changedNoOverride = Object.keys(pruned3).length === 0
+
+      // Null previous phase → no pruning
+      var pruned4 = __test.pruneStaleOverrides({ todo: false }, null, 'todo:full|in-progress:full')
+      results.prune.nullPrevPhase = pruned4.todo === false
+
+      // Mixed: two overrides, only affected one pruned
+      var prev5 = 'todo:empty|in-progress:full|done:empty'
+      var cur5 = 'todo:full|in-progress:full|done:full'  // todo and done flipped
+      var pruned5 = __test.pruneStaleOverrides({ todo: false, 'in-progress': true, done: true }, prev5, cur5)
+      results.prune.mixedPruning = pruned5.todo === undefined && pruned5['in-progress'] === true && pruned5.done === undefined
+    }
+
+    // 5. Toggle integration
+    results.toggleIntegration = {}
+    if (__test.toggleOverride && __test.computeCollapsedSet) {
+      var autoEmpty = { todo: true }
+      var autoFull = { 'in-progress': false }
+
+      // Toggle auto-collapsed twice → back to auto
+      var o1 = __test.toggleOverride({}, 'todo', autoEmpty)
+      var o2 = __test.toggleOverride(o1, 'todo', autoEmpty)
+      var cs1 = __test.computeCollapsedSet(autoEmpty, o2, ['todo'])
+      results.toggleIntegration.autoCollapsedDeleted = cs1.todo === true // auto wins
+
+      // Toggle auto-expanded twice → back to auto
+      var o3 = __test.toggleOverride({}, 'in-progress', autoFull)
+      var o4 = __test.toggleOverride(o3, 'in-progress', autoFull)
+      var cs2 = __test.computeCollapsedSet(autoFull, o4, ['in-progress'])
+      results.toggleIntegration.autoExpandedDeleted = cs2['in-progress'] === false // auto wins
+
+      // Partial toggle: only one lane, other preserved
+      var o5 = __test.toggleOverride({}, 'todo', autoEmpty)
+      var cs3 = __test.computeCollapsedSet(autoEmpty, o5, ['todo', 'in-progress'])
+      results.toggleIntegration.partialToggleKept = o5.todo === false && cs3['in-progress'] === false
+    }
+
+  } catch (e) {
+    results.__laneOverrideError = e.message
+  }
 }
 
 process.stdout.write(JSON.stringify(results))

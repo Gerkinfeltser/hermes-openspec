@@ -101,6 +101,75 @@ function filterItems(items, query) {
 
 function toggleArchived(current) { return !current }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Lane override helpers — pure, testable, canonical-aligned
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function computeCollapsedSet(autoCollapsed, manualOverrides, statusOrder) {
+  var result = {}
+  for (var i = 0; i < statusOrder.length; i++) {
+    var s = statusOrder[i]
+    if (manualOverrides[s] !== undefined) {
+      result[s] = manualOverrides[s]
+    } else {
+      result[s] = !!autoCollapsed[s]
+    }
+  }
+  return result
+}
+
+function toggleOverride(prev, status, autoCollapsed) {
+  var next = Object.assign({}, prev)
+  var auto = !!autoCollapsed[status]
+  if (next[status] !== undefined) {
+    delete next[status]
+  } else {
+    next[status] = !auto
+  }
+  return next
+}
+
+function computeLanePhase(grouped, statusOrder) {
+  if (!grouped) return null
+  var parts = []
+  for (var i = 0; i < statusOrder.length; i++) {
+    var s = statusOrder[i]
+    var items = grouped[s] || []
+    parts.push(s + ':' + (items.length === 0 ? 'empty' : 'full'))
+  }
+  return parts.join('|')
+}
+
+function pruneStaleOverrides(prevOverrides, prevPhase, lanePhase) {
+  if (prevPhase === null || lanePhase === null || lanePhase === prevPhase) {
+    return prevOverrides
+  }
+  var before = {}
+  var prevParts = prevPhase.split('|')
+  for (var i = 0; i < prevParts.length; i++) {
+    var kv = prevParts[i].split(':')
+    before[kv[0]] = kv[1]
+  }
+  var next = Object.assign({}, prevOverrides)
+  var changed = false
+  var curParts = lanePhase.split('|')
+  for (var j = 0; j < curParts.length; j++) {
+    var ckv = curParts[j].split(':')
+    var name = ckv[0]
+    var phase = ckv[1]
+    var was = before[name]
+    if (was !== undefined && was !== phase && next[name] !== undefined) {
+      delete next[name]
+      changed = true
+    }
+  }
+  return changed ? next : prevOverrides
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Lane layout helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
 var LANE_EXPANDED_WIDTH = 256
 var LANE_COLLAPSED_WIDTH = 32
 
@@ -702,32 +771,29 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
   var [filter, setFilter] = React.useState('')
   var [showArchived, setShowArchived] = React.useState(true)
   var [manualOverrides, setManualOverrides] = React.useState({})
+  var [prevLanePhase, setPrevLanePhase] = React.useState(null)
 
   var filtered = filterItems(allItems, filter)
   var grouped = groupByStatus(filtered, showArchived)
   var autoCollapsed = autoCollapseEmptyLanes(grouped, STATUS_ORDER)
 
-  // Merge auto-collapse with manual overrides: manual overrides always win,
-  // but clear stale overrides when lane gains/loses items
-  var collapsedSet = {}
-  for (var ci = 0; ci < STATUS_ORDER.length; ci++) {
-    var s = STATUS_ORDER[ci]
-    if (manualOverrides[s] !== undefined) {
-      collapsedSet[s] = manualOverrides[s]
-    } else {
-      collapsedSet[s] = !!autoCollapsed[s]
-    }
-  }
+  // Lane phase tracking — prune overrides when empty/full flips
+  var lanePhase = computeLanePhase(grouped, STATUS_ORDER)
+  React.useEffect(function() {
+    if (lanePhase === null || lanePhase === prevLanePhase) return
+    var prev = prevLanePhase
+    setPrevLanePhase(lanePhase)
+    if (prev === null) return
+    setManualOverrides(function(prevOverrides) {
+      return pruneStaleOverrides(prevOverrides, prev, lanePhase)
+    })
+  }, [lanePhase, prevLanePhase])
+
+  var collapsedSet = computeCollapsedSet(autoCollapsed, manualOverrides, STATUS_ORDER)
 
   function toggleCollapse(status) {
     setManualOverrides(function(prev) {
-      var next = Object.assign({}, prev)
-      if (next[status] !== undefined) {
-        delete next[status]
-      } else {
-        next[status] = !autoCollapsed[status]
-      }
-      return next
+      return toggleOverride(prev, status, autoCollapsed)
     })
   }
 
@@ -935,7 +1001,7 @@ function OpenSpecPage({ api }) {
     // View body
     jsx('div', { style: { flex: 1, overflow: 'hidden', padding: '12px 16px' }, children: selectedSource && selectedSource.valid !== false ? (
       view === 'work'
-        ? jsx(WorkView, { api: api, source: selectedSource, sourceToken: selectedSource.token, onSelectItem: onSelectItem })
+        ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sourceToken: selectedSource.token, onSelectItem: onSelectItem })
         : jsx(SpecsView, { api: api, sourceId: selectedSource.id })
     ) : selectedSource && selectedSource.valid === false ? null : jsx(EmptyState, { title: 'Select a source', description: 'Choose a source to view its OpenSpec project.' }) }),
 
@@ -1002,4 +1068,8 @@ export const __test = Object.freeze({
   expandedStyle: expandedStyle,
   LANE_EXPANDED_WIDTH: LANE_EXPANDED_WIDTH,
   LANE_COLLAPSED_WIDTH: LANE_COLLAPSED_WIDTH,
+  computeCollapsedSet: computeCollapsedSet,
+  toggleOverride: toggleOverride,
+  computeLanePhase: computeLanePhase,
+  pruneStaleOverrides: pruneStaleOverrides,
 })

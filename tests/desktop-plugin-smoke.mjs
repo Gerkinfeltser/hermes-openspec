@@ -688,8 +688,19 @@ check(source.includes('overflowY'), 'Cards container has overflowY for vertical 
   var wvSec = source.slice(wvStart, wvEnd > 0 ? wvEnd : source.length)
   check(wvSec.includes('manualOverrides'), 'WorkView tracks manual collapse overrides')
   check(wvSec.includes('autoCollapseEmptyLanes'), 'WorkView uses autoCollapseEmptyLanes')
+  check(wvSec.includes('computeCollapsedSet'), 'WorkView uses computeCollapsedSet helper')
+  check(wvSec.includes('toggleOverride'), 'WorkView uses toggleOverride helper')
+  check(wvSec.includes('computeLanePhase'), 'WorkView uses computeLanePhase for phase tracking')
+  check(wvSec.includes('pruneStaleOverrides'), 'WorkView uses pruneStaleOverrides for phase pruning')
+  check(wvSec.includes('prevLanePhase'), 'WorkView tracks previous lane phase')
   check(wvSec.includes('overflowX'), 'WorkView lane strip has overflowX')
   check(!wvSec.includes('ScrollArea'), 'WorkView no longer uses ScrollArea')
+}
+
+// WorkView source keying
+{
+  var wvkPattern = /key:\s*selectedSource\.id/
+  check(wvkPattern.test(source), 'WorkView render has key={selectedSource.id} for source identity')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
