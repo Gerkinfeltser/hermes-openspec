@@ -63,5 +63,5 @@
 
 ## 9. Contribution Gate
 
-- [ ] 9.1 Commit and push implementation branch only to `Gerkinfeltser/hermes-openspec`; verify remote branch SHA matches local SHA and upstream remote is unchanged.
+- [x] 9.1 Commit and push implementation branch only to `Gerkinfeltser/hermes-openspec`; verify remote branch SHA matches local SHA and upstream remote is unchanged.
 - [ ] 9.2 After maintainer-scope approval, open an issue or draft PR describing read-only scope, runtime constraints, screenshots, tests, and excluded writes; verify no upstream contribution is opened before that approval.

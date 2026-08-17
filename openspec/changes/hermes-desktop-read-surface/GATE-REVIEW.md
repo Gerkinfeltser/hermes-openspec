@@ -118,9 +118,9 @@ The reviewed implementation is deployed and the fork branch is release-ready for
 - `node tests/desktop-plugin-smoke.mjs`: 244 passed, 0 failed.
 - `node tests/lane-override-behavior.mjs`: 23 passed, 0 failed.
 - `node spikes/001-desktop-route-api/smoke.mjs`: 36 passed, 0 failed.
-- Host-integrated `pytest -q`: 55 passed in 3.03s.
+- Host-integrated `pytest -q`: 55 passed in 3.13s on the final documentation tree.
 - `openspec validate hermes-desktop-read-surface --strict`: valid.
-- `git diff --check 527d3b2..HEAD`: clean before this documentation update.
+- `git diff --check`: clean on the final documentation tree.
 
 ### Open conditions
 
