@@ -398,6 +398,54 @@ if (r.__testAvailable) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Canonical status tone mapping and style shape tests
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Canonical] Status tone mapping and style shape')
+
+if (r.__testAvailable) {
+  var st = r.statusTone || {}
+  console.log('  STATUS_TONE mapping')
+  check(st.ideas === 'var(--ui-text-tertiary)', 'ideas -> triage tone', JSON.stringify(st.ideas))
+  check(st.draft === '#a78bfa', 'draft -> scheduled tone', JSON.stringify(st.draft))
+  check(st.todo === 'var(--ui-text-secondary)', 'todo -> todo tone', JSON.stringify(st.todo))
+  check(st.inProgress === '#34d399', 'in-progress -> running tone', JSON.stringify(st.inProgress))
+  check(st.done === 'var(--ui-text-tertiary)', 'done -> done tone', JSON.stringify(st.done))
+  check(st.archived === 'var(--ui-text-quaternary)', 'archived -> archived tone', JSON.stringify(st.archived))
+  check(st.unknown === 'var(--ui-text-secondary)', 'statusTone falls back to secondary for unknown', JSON.stringify(st.unknown))
+
+  console.log('  STATUS_TONE values')
+  check(st.ideasIsVar === true, 'ideas tone uses var(--ui-text-tertiary)', JSON.stringify(st.ideasIsVar))
+  check(st.draftIsPurple === true, 'draft tone is #a78bfa', JSON.stringify(st.draftIsPurple))
+  check(st.todoIsVar === true, 'todo tone uses var(--ui-text-secondary)', JSON.stringify(st.todoIsVar))
+  check(st.inProgressIsGreen === true, 'in-progress tone is #34d399', JSON.stringify(st.inProgressIsGreen))
+  check(st.doneIsVar === true, 'done tone uses var(--ui-text-tertiary)', JSON.stringify(st.doneIsVar))
+  check(st.archivedIsVar === true, 'archived tone uses var(--ui-text-quaternary)', JSON.stringify(st.archivedIsVar))
+
+  // Style shape checks
+  var ll = r.laneLayout || {}
+  console.log('  Canonical lane style shape')
+  check(ll.expandedHasBg === true, 'Expanded lane uses color-mix canonical wash', JSON.stringify(ll.expandedHasBg))
+  check(ll.expandedHasRounded === true, 'Expanded lane has 8px border-radius', JSON.stringify(ll.expandedHasRounded))
+  check(ll.expandedHasPadding === true, 'Expanded lane has 8px padding', JSON.stringify(ll.expandedHasPadding))
+  check(ll.railWidth === '32px', 'Rail width is 32px', JSON.stringify(ll.railWidth))
+  check(ll.railFlexShrink === 0, 'Rail flex-shrink is 0', JSON.stringify(ll.railFlexShrink))
+
+  // Static source checks for canonical styling
+  console.log('  Canonical source patterns')
+  check(source.includes('statusTone'), 'statusTone function used in source')
+  check(source.includes('STATUS_TONE'), 'STATUS_TONE map present in source')
+  check(source.includes("borderLeftColor: statusTone(status)"), 'BoardCard uses statusTone for left border color')
+  check(source.includes("borderLeftWidth: '2px'"), 'BoardCard has 2px left border')
+  check(source.includes("background: 'var(--ui-bg-elevated)'"), 'BoardCard uses elevated surface')
+  check(source.includes('border-(--ui-border-tertiary)'), 'BoardCard uses tertiary border class')
+  check(source.includes("backgroundColor: statusTone(status)"), 'Lane/rail status dot uses statusTone')
+  check(!source.includes('#1a1a2e'), 'No hardcoded blue rail background')
+  check(!source.includes("writingMode: 'vertical-rl'"), 'No vertical writing mode in railStyle')
+} else {
+  fail('Canonical status tone mapping', '__test not available')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Static analysis checks — SDK usage patterns
 // ═══════════════════════════════════════════════════════════════════════════════
 console.log('\n[Static] Source analysis')

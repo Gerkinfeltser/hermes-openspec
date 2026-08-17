@@ -398,6 +398,27 @@ if (__test) {
       results.laneLayout.expandedWidthPx = es && es.width
       results.laneLayout.expandedFlexShrink = es && es.flexShrink
       results.laneLayout.expandedOverflow = es && es.overflow
+      results.laneLayout.expandedHasBg = es && es.background && es.background.includes('color-mix')
+      results.laneLayout.expandedHasRounded = es && es.borderRadius === '8px'
+      results.laneLayout.expandedHasPadding = es && es.padding === '8px'
+    }
+
+    // STATUS_TONE mapping
+    results.statusTone = {}
+    if (__test.STATUS_TONE && __test.statusTone) {
+      results.statusTone.ideas = __test.statusTone('ideas')
+      results.statusTone.draft = __test.statusTone('draft')
+      results.statusTone.todo = __test.statusTone('todo')
+      results.statusTone.inProgress = __test.statusTone('in-progress')
+      results.statusTone.done = __test.statusTone('done')
+      results.statusTone.archived = __test.statusTone('archived')
+      results.statusTone.unknown = __test.statusTone('unknown-status')
+      results.statusTone.ideasIsVar = __test.STATUS_TONE['ideas'] === 'var(--ui-text-tertiary)'
+      results.statusTone.draftIsPurple = __test.STATUS_TONE['draft'] === '#a78bfa'
+      results.statusTone.todoIsVar = __test.STATUS_TONE['todo'] === 'var(--ui-text-secondary)'
+      results.statusTone.inProgressIsGreen = __test.STATUS_TONE['in-progress'] === '#34d399'
+      results.statusTone.doneIsVar = __test.STATUS_TONE['done'] === 'var(--ui-text-tertiary)'
+      results.statusTone.archivedIsVar = __test.STATUS_TONE['archived'] === 'var(--ui-text-quaternary)'
     }
 
     // URL safety

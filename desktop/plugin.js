@@ -173,6 +173,23 @@ function pruneStaleOverrides(prevOverrides, prevPhase, lanePhase) {
 var LANE_EXPANDED_WIDTH = 256
 var LANE_COLLAPSED_WIDTH = 32
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Canonical status tone mapping — aligned with kanban/types.ts COLUMN_META
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var STATUS_TONE = {
+  'ideas': 'var(--ui-text-tertiary)',
+  'draft': '#a78bfa',
+  'todo': 'var(--ui-text-secondary)',
+  'in-progress': '#34d399',
+  'done': 'var(--ui-text-tertiary)',
+  'archived': 'var(--ui-text-quaternary)',
+}
+
+function statusTone(status) {
+  return STATUS_TONE[status] || 'var(--ui-text-secondary)'
+}
+
 function autoCollapseEmptyLanes(grouped, statusOrder) {
   var totalItems = 0
   for (var i = 0; i < statusOrder.length; i++) {
@@ -195,7 +212,7 @@ function laneWidth(status, collapsedSet) {
   return (collapsedSet && collapsedSet[status]) ? LANE_COLLAPSED_WIDTH : LANE_EXPANDED_WIDTH
 }
 
-function railStyle(label) {
+function railStyle(label, status) {
   return {
     width: LANE_COLLAPSED_WIDTH + 'px',
     minWidth: LANE_COLLAPSED_WIDTH + 'px',
@@ -207,11 +224,9 @@ function railStyle(label) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '4px',
-    background: 'var(--muted-background, #1a1a2e)',
-    borderRadius: '6px',
-    padding: '4px 0',
-    writingMode: 'vertical-rl',
-    textOrientation: 'mixed',
+    background: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)',
+    borderRadius: '8px',
+    padding: '8px 0',
     overflow: 'hidden',
   }
 }
@@ -224,6 +239,9 @@ function expandedStyle() {
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
+    background: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)',
+    borderRadius: '8px',
+    padding: '8px',
     overflow: 'hidden',
   }
 }
@@ -484,12 +502,14 @@ function BoardCard({ item, sourceId, sourceToken, onSelect }) {
   var title = item.title || item.name || 'Untitled'
   var displayToken = sourceToken ? sourceToken + '/' + token : token
   var onClick = function() { onSelect(item) }
+  var status = normalizeStatus(item.status || item.state || item.phase)
   return jsxs('div', {
     className: cn(
-      'rounded-md border border-(--ui-border) p-3 cursor-pointer',
+      'rounded-md border border-(--ui-border-tertiary) p-3 cursor-pointer',
       'hover:border-(--ui-focus-border) transition-colors',
       'flex flex-col gap-1'
     ),
+    style: { background: 'var(--ui-bg-elevated)', borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
     onClick: onClick,
     children: [
       jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }, children: [
@@ -524,17 +544,19 @@ function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand })
   var count = items.length
 
   if (collapsed) {
-    return jsx('div', { style: railStyle(label), onClick: onExpand, title: label + (count > 0 ? ' (' + count + ')' : ''), children: [
-      jsx('span', { style: { fontSize: '10px', fontWeight: 600, color: 'var(--muted-foreground, #aaa)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }, children: label }),
-      count > 0 ? jsx('span', { style: { fontSize: '9px', color: 'var(--primary, #4caf50)' }, children: count }) : null,
+    return jsx('div', { style: railStyle(label, status), onClick: onExpand, title: label + (count > 0 ? ' (' + count + ')' : ''), children: [
+      jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
+      jsx('span', { style: { fontSize: '10px', fontWeight: 600, color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }, children: label }),
+      count > 0 ? jsx('span', { style: { fontSize: '9px', color: 'var(--ui-text-quaternary)' }, children: count }) : null,
     ] })
   }
 
   return jsxs('div', { style: expandedStyle(), 'data-lane': status, children: [
     jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 8px' }, children: [
-      jsxs('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--muted-foreground, #888)', letterSpacing: '0.05em' }, children: [
-        label,
-        count > 0 ? ' (' + count + ')' : '',
+      jsxs('span', { style: { display: 'flex', alignItems: 'center', gap: '6px' }, children: [
+        jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
+        jsx('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em' }, children: label }),
+        count > 0 ? jsx('span', { style: { fontSize: '12px', color: 'var(--ui-text-quaternary)' }, children: '(' + count + ')' }) : null,
       ] }),
       jsx('button', { onClick: onExpand, title: 'Collapse ' + label, style: { background: 'none', border: 'none', color: 'var(--muted-foreground, #888)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }, children: '\u2013' }),
     ] }),
@@ -1068,6 +1090,8 @@ export const __test = Object.freeze({
   expandedStyle: expandedStyle,
   LANE_EXPANDED_WIDTH: LANE_EXPANDED_WIDTH,
   LANE_COLLAPSED_WIDTH: LANE_COLLAPSED_WIDTH,
+  STATUS_TONE: STATUS_TONE,
+  statusTone: statusTone,
   computeCollapsedSet: computeCollapsedSet,
   toggleOverride: toggleOverride,
   computeLanePhase: computeLanePhase,
