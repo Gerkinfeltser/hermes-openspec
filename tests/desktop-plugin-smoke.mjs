@@ -417,13 +417,8 @@ check(!source.includes('alert('), 'No alert() calls')
 // Retry handlers on error states
 check(source.includes('query.refetch()'), 'query.refetch() retry handler present')
 check(source.includes('specQuery.refetch()'), 'specQuery.refetch() retry handler present')
-// ChangeDetailDialog, IdeaDetailDialog, and specQuery ErrorState all have onRetry
-{
-  var retryMatches = source.match(/onRetry:\s*function\(\)\s*\{\s*query\.refetch\(\)\s*\}/g)
-  check(retryMatches && retryMatches.length >= 2, 'At least 2 query.refetch retry handlers (change + idea)',
-    retryMatches ? 'Found ' + retryMatches.length : 'None found')
-  check(source.includes('specQuery.refetch()'), 'specQuery retry handler present')
-}
+// CRITICAL: No ErrorState uses onRetry (SDK does not accept it)
+// Retry is handled by RetryErrorState wrapper with Button child
 
 // Stale detail guard — item bound to source at click
 check(source.includes('selectedItem.sourceId === selectedSourceId'), 'Detail dialog has source-matching gate')
@@ -547,6 +542,69 @@ check(source.includes('Object.freeze'), '__test export uses Object.freeze')
 {
   const dialogLoadingMatch = source.match(/Dialog.*open.*onOpenChange.*DialogContent/)
   check(dialogLoadingMatch, 'Dialog loading state wraps content in DialogContent')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SDK contract: ErrorState retry wrapper and CopyButton text prop
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[SDK] ErrorState contract: no onRetry prop')
+
+// CRITICAL: ErrorState does NOT accept onRetry — must not appear in any jsx() call
+// Use non-greedy [^\n]* to avoid matching nested jsx(Button, { onClick: onRetry })
+{
+  var errorStateOnRetry = source.match(/jsx\(ErrorState[^\n]*onRetry/g)
+  check(!errorStateOnRetry, 'No ErrorState call passes onRetry prop',
+    errorStateOnRetry ? 'Found ' + errorStateOnRetry.length + ' onRetry in ErrorState' : undefined)
+}
+
+// RetryErrorState must exist as a reusable wrapper
+check(source.includes('function RetryErrorState'), 'RetryErrorState function defined')
+check(source.includes('RetryErrorState'), 'RetryErrorState is used in source')
+
+// RetryErrorState renders ErrorState as root, Button as child with onClick
+// Verify via __test export: RetryErrorState descriptor structure
+if (r.__testAvailable && r.retryErrorState) {
+  var res = r.retryErrorState
+  console.log('  RetryErrorState descriptor')
+  check(res.rootIsErrorState === true, 'RetryErrorState renders ErrorState (function component) as root')
+  check(res.hasButtonChild === true, 'RetryErrorState has Button child')
+  check(res.buttonOnClickIsFunction === true, 'Button child onClick is a function')
+  check(res.buttonLabel === 'Retry', 'Button child label is "Retry"', JSON.stringify(res.buttonLabel))
+  // Execute onClick and verify it invokes the callback
+  check(res.onClickInvokesCallback === true, 'Button onClick invokes the supplied retry callback')
+}
+
+console.log('\n[SDK] CopyButton contract: text prop, not value')
+
+// CRITICAL: CopyButton requires text, not value
+{
+  var copyButtonValue = source.match(/jsx\(CopyButton[^)]*\bvalue:/g)
+  check(!copyButtonValue, 'No CopyButton call uses value prop',
+    copyButtonValue ? 'Found ' + copyButtonValue.length + ' value props on CopyButton' : undefined)
+}
+{
+  var copyButtonText = source.match(/jsx\(CopyButton[^)]*\btext:/g)
+  check(copyButtonText && copyButtonText.length >= 2, 'At least 2 CopyButton calls use text prop',
+    copyButtonText ? 'Found ' + copyButtonText.length : 'None found')
+}
+
+// Board-card CopyButton must have stopPropagation: true (inside clickable card)
+{
+  var bcStart = source.indexOf('function BoardCard')
+  var bcEnd = source.indexOf('\nfunction ', bcStart + 1)
+  var bcSection = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
+  check(bcSection.includes('stopPropagation: true'), 'BoardCard CopyButton has stopPropagation: true')
+  check(bcSection.includes('text: displayToken'), 'BoardCard CopyButton uses text prop (not value)')
+  check(!bcSection.includes('value: displayToken'), 'BoardCard CopyButton does not use value prop')
+}
+
+// Detail CopyButton should NOT have stopPropagation (not inside clickable card)
+{
+  var cdStart = source.indexOf('function ChangeDetailDialog')
+  var cdEnd = source.indexOf('\nfunction ', cdStart + 1)
+  var cdSection = source.slice(cdStart, cdEnd > 0 ? cdEnd : source.length)
+  check(cdSection.includes('text: token'), 'ChangeDetailDialog CopyButton uses text prop')
+  check(!cdSection.includes('stopPropagation'), 'ChangeDetailDialog CopyButton does not set stopPropagation')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -298,10 +298,25 @@ function MarkdownView({ content }) {
 // Query state wrapper
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Reusable retry error state: ErrorState with a Button child wired to onRetry.
+// Real SDK ErrorStateProps has no onRetry — canonical pattern nests Button child.
+function RetryErrorState({ title, description, onRetry }) {
+  return jsx(ErrorState, {
+    title: title,
+    description: description,
+    children: onRetry ? jsx(Button, {
+      variant: 'outline',
+      size: 'sm',
+      onClick: onRetry,
+      children: 'Retry'
+    }) : null
+  })
+}
+
 function QueryState({ query, onRetry, emptyTitle, emptyDescription, children }) {
   var state = classifyState(query)
   if (state === 'loading') return jsx(Loader, { type: 'lemniscate-bloom' })
-  if (state === 'error') return jsx(ErrorState, {
+  if (state === 'error') return jsx(RetryErrorState, {
     title: 'Request failed',
     description: (query.error && query.error.message) || 'Could not reach the backend.',
     onRetry: onRetry
@@ -355,7 +370,7 @@ function BoardCard({ item, sourceId, sourceToken, onSelect }) {
         item.sequence != null ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', flexShrink: 0 }, children: '#' + item.sequence }) : null
       ] }),
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }, children: [
-        jsx(CopyButton, { value: displayToken, children: jsx('span', { style: { fontSize: '11px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: displayToken }) }),
+        jsx(CopyButton, { text: displayToken, stopPropagation: true, children: jsx('span', { style: { fontSize: '11px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: displayToken }) }),
         jsx(CardTaskFraction, { item: item }),
       ] }),
       jsx(CardArtifacts, { item: item }),
@@ -408,7 +423,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
   var [activeTab, setActiveTab] = React.useState(null)
 
   if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load change', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(RetryErrorState, { title: 'Failed to load change', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
 
   var data = query.data || {}
   var tabs = []
@@ -427,7 +442,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
       jsxs('div', { style: { marginBottom: '12px' }, children: [
         jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
-          jsx(CopyButton, { value: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
+          jsx(CopyButton, { text: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
           data.taskStats ? jsx(Badge, { variant: 'outline', children: data.taskStats.done + '/' + data.taskStats.total + ' tasks' }) : null,
         ] }),
       ] }),
@@ -475,7 +490,7 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
   })
 
   if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load idea', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(RetryErrorState, { title: 'Failed to load idea', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
 
   var data = query.data || {}
   var title = idea.title || idea.name || 'Idea Detail'
@@ -681,7 +696,7 @@ function SpecsView({ api, sourceId }) {
       worktree ? jsx(Badge, { variant: 'outline', children: changedCount + ' changed' }) : null,
     ] }),
     query.isLoading ? jsx(Loader, { type: 'lemniscate-bloom' }) : null,
-    query.error ? jsx(ErrorState, { title: 'Failed to load specs', description: query.error.message, onRetry: function() { query.refetch() } }) : null,
+    query.error ? jsx(RetryErrorState, { title: 'Failed to load specs', description: query.error.message, onRetry: function() { query.refetch() } }) : null,
     !query.isLoading && !query.error && files.length === 0 ? jsx(EmptyState, {
       title: worktree ? 'No spec changes between HEAD and worktree' : 'No specs found',
       description: worktree ? 'The working tree matches HEAD for all spec files.' : 'No spec files are registered for this source.',
@@ -707,7 +722,7 @@ function SpecsView({ api, sourceId }) {
       jsxs('div', { style: { flex: 1, overflow: 'auto' }, children: [
         worktree && selectedFile ? jsx(WorktreeDetailView, { sourceId: sourceId, file: selectedFile, files: files }) : null,
         !worktree && selectedFile && specQuery.isLoading ? jsx(Loader, { type: 'lemniscate-bloom' }) : null,
-        !worktree && selectedFile && specQuery.error ? jsx(ErrorState, { title: 'Failed to load spec', description: specQuery.error.message, onRetry: function() { specQuery.refetch() } }) : null,
+        !worktree && selectedFile && specQuery.error ? jsx(RetryErrorState, { title: 'Failed to load spec', description: specQuery.error.message, onRetry: function() { specQuery.refetch() } }) : null,
         !worktree && selectedFile && !specQuery.isLoading && !specQuery.error ? jsx(MarkdownView, { content: specQuery.data && specQuery.data.content }) : null,
         !selectedFile ? jsx(EmptyState, { title: 'Select a file', description: 'Choose a spec file from the list to view its content.' }) : null,
       ] }),
@@ -771,7 +786,7 @@ function OpenSpecPage({ api }) {
   var selectedSource = sources.find(function(s) { return s.id === selectedSourceId }) || null
 
   if (sourcesQuery.isLoading) return jsx(Loader, { type: 'lemniscate-bloom' })
-  if (sourcesQuery.error) return jsx(ErrorState, { title: 'Failed to load sources', description: sourcesQuery.error.message, onRetry: function() { sourcesQuery.refetch() } })
+  if (sourcesQuery.error) return jsx(RetryErrorState, { title: 'Failed to load sources', description: sourcesQuery.error.message, onRetry: function() { sourcesQuery.refetch() } })
   if (sources.length === 0) return jsx(EmptyState, { title: 'No sources registered', description: 'Register a source via the CLI or dashboard to get started.' })
 
   var onSelectItem = function(item) {
@@ -881,4 +896,5 @@ export const __test = Object.freeze({
   isSafeUrl: isSafeUrl,
   renderInline: renderInline,
   MarkdownElement: MarkdownElement,
+  RetryErrorState: RetryErrorState,
 })

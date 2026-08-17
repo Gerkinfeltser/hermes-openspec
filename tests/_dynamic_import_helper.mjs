@@ -324,6 +324,40 @@ if (__test) {
       results.effectiveDiffMode.splitToRaw = __test.effectiveDiffMode('split', { diff: '+line' })
     }
 
+    // RetryErrorState wrapper — verify structure via __test
+    results.retryErrorState = null
+    if (__test.RetryErrorState) {
+      // Call RetryErrorState with a test callback and title/description
+      var testCallback = function() { return 'retried' }
+      var descriptor = __test.RetryErrorState({ title: 'Error', description: 'fail', onRetry: testCallback })
+      if (descriptor && descriptor._t) {
+        var res = { rootIsErrorState: false, hasButtonChild: false, buttonOnClickIsFunction: false, buttonLabel: null, onClickInvokesCallback: false }
+        // Root should be ErrorState — the shim stores the function reference
+        // (not the string 'ErrorState'), so verify it's a function
+        res.rootIsErrorState = typeof descriptor.component === 'function'
+        // Children should contain a Button
+        var children = descriptor.props && descriptor.props.children
+        if (children) {
+          var childArr = Array.isArray(children) ? children : [children]
+          for (var ci = 0; ci < childArr.length; ci++) {
+            var child = childArr[ci]
+            if (child && child._t && child.component && typeof child.component === 'function') {
+              res.hasButtonChild = true
+              res.buttonLabel = child.props && child.props.children
+              var onClick = child.props && child.props.onClick
+              res.buttonOnClickIsFunction = typeof onClick === 'function'
+              if (res.buttonOnClickIsFunction) {
+                var result = onClick()
+                res.onClickInvokesCallback = result === 'retried'
+              }
+              break
+            }
+          }
+        }
+        results.retryErrorState = res
+      }
+    }
+
     // URL safety
     results.urlSafety = {}
     if (__test.isSafeUrl) {
