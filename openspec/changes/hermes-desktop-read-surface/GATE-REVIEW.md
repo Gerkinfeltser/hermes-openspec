@@ -98,3 +98,33 @@ Warnings:
 ## Implementation Release Condition
 
 Artifacts are spec-ready. Implementation remains unauthorized until explicit user approval. Live deployment requires separate approval at task 8.2.
+
+## FINAL Gate
+
+Reviewed: 2026-08-17
+
+**Verdict: CONDITIONAL**
+
+The reviewed implementation is deployed and the fork branch is release-ready for the verified Work-board scope. The OpenSpec change remains active until live change-detail and Specs evidence is captured; upstream issue/PR work remains separately approval-gated.
+
+### Verified evidence
+
+- Commit: `c3f92d2f5f3c1b21d783598b264971be93014233` before this evidence-only documentation update.
+- Deployed plugin: local and Tennant SHA-256 `234302309c1b3b6189e88fdc0fceaea663b569eb051640ad10674f26cdb20430`, 57,380 bytes.
+- Rollback: baseline commit `059282c`, plugin SHA-256 `29f7393e1102a354083da2ab35f81890814a0310961d31fe7c700d7891cceb85`; pre-deploy live backup `plugin.js.rollback-6096040b2c484677-20260817-161239.bak` preserved.
+- Live Work view: OpenSpec route active on Tennant against remote VPS backend; `ivault` source selector/counts and non-empty board visible; empty lanes collapsed; no plugin error banner; user confirmed board-owned horizontal scrollbar works.
+- Live screenshot SHA-256: `42769fd58921a2d2c2657c1c4f75b79a316e4c8eb14c992b1e8418a5d39fa64a` (not committed because it contains the user's full desktop).
+- `node --input-type=module --check < desktop/plugin.js`: exit 0.
+- `node tests/desktop-plugin-smoke.mjs`: 244 passed, 0 failed.
+- `node tests/lane-override-behavior.mjs`: 23 passed, 0 failed.
+- `node spikes/001-desktop-route-api/smoke.mjs`: 36 passed, 0 failed.
+- Host-integrated `pytest -q`: 55 passed in 3.03s.
+- `openspec validate hermes-desktop-read-surface --strict`: valid.
+- `git diff --check 527d3b2..HEAD`: clean before this documentation update.
+
+### Open conditions
+
+- Task 8.3 remains open because filter, archived-toggle, and change-detail interaction were not all captured live.
+- Task 8.4 remains open because Current Specs plus dirty/no-diff state were not captured live.
+- Task 9.2 remains open because no maintainer-scope approval exists for an upstream issue or draft PR.
+- Live screenshot shows a `#[object Object]` card badge. This is a readability defect outside the verified lane-scroll repair and should be corrected before claiming full visual acceptance.

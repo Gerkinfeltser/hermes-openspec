@@ -1,8 +1,8 @@
 ## 1. Spike Evidence and Baseline
 
-- [ ] 1.1 Append parent-observed live evidence to `spikes/001-desktop-route-api/README.md`, including 2026-08-17 screenshot facts and wording that `VALIDATED` applies to route/sidebar/API seam only; verify caveats no longer say live Desktop and real backend are unobserved.
-- [ ] 1.2 Preserve commit `059282c` as rollback baseline and record its `desktop/plugin.js` SHA-256 in `spikes/001-desktop-route-api/README.md`; verify `git show 059282c:desktop/plugin.js` succeeds and recorded hash matches command output.
-- [ ] 1.3 Run `node --check` against baseline `desktop/plugin.js` and `node spikes/001-desktop-route-api/smoke.mjs`; verify both commands exit 0 and record exact results in spike report.
+- [x] 1.1 Append parent-observed live evidence to `spikes/001-desktop-route-api/README.md`, including 2026-08-17 screenshot facts and wording that `VALIDATED` applies to route/sidebar/API seam only; verify caveats no longer say live Desktop and real backend are unobserved.
+- [x] 1.2 Preserve commit `059282c` as rollback baseline and record its `desktop/plugin.js` SHA-256 in `spikes/001-desktop-route-api/README.md`; verify `git show 059282c:desktop/plugin.js` succeeds and recorded hash matches command output.
+- [x] 1.3 Run `node --check` against baseline `desktop/plugin.js` and `node spikes/001-desktop-route-api/smoke.mjs`; verify both commands exit 0 and record exact results in spike report.
 
 ## 2. Runtime Contract and API Adapter
 
@@ -47,19 +47,19 @@
 
 - [x] 7.1 Run `node --check` on a temporary `.mjs` copy of `desktop/plugin.js`; verify exit 0.
 - [x] 7.2 Run `node tests/desktop-plugin-smoke.mjs`; verify all cases pass, temporary files are removed, and command exits 0.
-- [ ] 7.3 Run existing repository tests with `pytest -q`; verify exit 0 and no pre-existing suite regression.
+- [x] 7.3 Run existing repository tests with `pytest -q`; verify exit 0 and no pre-existing suite regression.
 - [x] 7.4 Update appropriate root documentation with Desktop install path, enablement, read-only scope, remote-backend behavior, and rollback commit; verify every documented command/path exists.
 - [x] 7.5 Run `openspec validate hermes-desktop-read-surface --strict`; verify valid result after all documentation changes.
 - [x] 7.6 Review `git diff --check`, changed-file list, and working tree; verify no generated child harness, debug logs, secrets, backend changes, Hermes-core changes, or unrelated files remain.
 
 ## 8. Parent Review and Live Deployment Gate
 
-- [ ] 8.1 Independently review `desktop/plugin.js` and `tests/desktop-plugin-smoke.mjs` against every spec scenario; verify requirement-to-test matrix has no empty row before live copy.
-- [ ] 8.2 After explicit deployment approval, copy reviewed `desktop/plugin.js` to Tennant `%LOCALAPPDATA%\hermes\desktop-plugins\openspec\plugin.js`; verify local and remote SHA-256 values match without restarting Desktop.
+- [x] 8.1 Independently review `desktop/plugin.js` and `tests/desktop-plugin-smoke.mjs` against every spec scenario; verify requirement-to-test matrix has no empty row before live copy.
+- [x] 8.2 After explicit deployment approval, copy reviewed `desktop/plugin.js` to Tennant `%LOCALAPPDATA%\hermes\desktop-plugins\openspec\plugin.js`; verify local and remote SHA-256 values match without restarting Desktop.
 - [ ] 8.3 On remote-backed Tennant Desktop, inspect source selector/counts, non-empty Work board, filter, archived toggle, and one change detail with artifact tabs; verify each control works and capture screenshot evidence.
 - [ ] 8.4 Inspect current Specs plus dirty diff or honest no-diff empty state; verify expected content appears, capture screenshot evidence, and confirm no Windows-side repository-path access occurs.
-- [ ] 8.5 Force one recoverable request failure or use unavailable-backend test fixture; verify scoped error and retry behavior without plugin/Desktop crash.
-- [ ] 8.6 If any live acceptance check fails, restore commit `059282c` plugin bytes; verify sidebar plus source seam return, otherwise record FINAL gate evidence.
+- [x] 8.5 Force one recoverable request failure or use unavailable-backend test fixture; verify scoped error and retry behavior without plugin/Desktop crash.
+- [x] 8.6 If any live acceptance check fails, restore commit `059282c` plugin bytes; verify sidebar plus source seam return, otherwise record FINAL gate evidence.
 
 ## 9. Contribution Gate
 

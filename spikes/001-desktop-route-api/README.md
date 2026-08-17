@@ -85,6 +85,25 @@ $ node spikes/001-desktop-route-api/smoke.mjs
 
 Exit code: 0 (all pass)
 
+### 2026-08-17 Parent Rerun and Rollback Baseline
+
+The parent verifier preserved commit `059282c` as the rollback baseline and verified its exact plugin bytes:
+
+```text
+git show 059282c:desktop/plugin.js | sha256sum
+29f7393e1102a354083da2ab35f81890814a0310961d31fe7c700d7891cceb85  -
+
+git show 059282c:desktop/plugin.js | node --input-type=module --check
+exit 0
+
+node spikes/001-desktop-route-api/smoke.mjs
+36 passed, 0 failed; exit 0
+```
+
+The reviewed implementation at commit `c3f92d2f5f3c1b21d783598b264971be93014233` was deployed to Tennant without restarting Desktop. Local and remote `desktop/plugin.js` SHA-256 values matched at `234302309c1b3b6189e88fdc0fceaea663b569eb051640ad10674f26cdb20430` (57,380 bytes). The prior live plugin was preserved as `plugin.js.rollback-6096040b2c484677-20260817-161239.bak`.
+
+Parent-observed live evidence on 2026-08-17 showed the `/openspec` route active against the remote VPS backend, the `ivault` source selector and counts, a non-empty Work board, empty lanes collapsed to rails, no plugin error banner, and board-owned horizontal scrolling. Screenshot SHA-256: `42769fd58921a2d2c2657c1c4f75b79a316e4c8eb14c992b1e8418a5d39fa64a`. The user independently confirmed: "Scroll works. it has a horiz scroll bar now".
+
 ## Compatibility Findings
 
 ### SDK Seam Compatibility
@@ -134,13 +153,13 @@ Exit code: 0 (all pass)
 
 ## Caveats
 
-1. **Live Desktop rendering NOT verified** — the smoke harness runs headlessly. Real rendering in Desktop requires the parent verifier to install + enable + navigate.
-2. **Real backend response NOT verified** — the smoke harness mocks `ctx.rest`. Actual `/sources` data requires a running gateway with OpenSpec sources registered.
-3. **CSS/Tailwind classes are assumed** — the plugin uses `cn()` with Tailwind utility classes that match the kanban plugin's patterns. Live rendering may need minor style adjustments.
+1. **Live Desktop rendering verified for the route and Work board** — Tennant rendered the runtime plugin against the remote VPS backend; source counts, populated lanes, collapsed empty rails, and horizontal scrolling were observed.
+2. **Real backend response verified for source and board data** — the live `ivault` source rendered remote OpenSpec counts and cards through `ctx.rest`.
+3. **Live detail and Specs interactions remain unobserved** — automated coverage passes, but the parent did not capture interaction proof for a change detail, Current Specs, or dirty/no-diff Specs state.
 4. **No write operations** — this spike is read-only. Source registration/updates remain dashboard-only.
 5. **Sidebar position** — `order: 50` places OpenSpec below Artifacts (which has no explicit order, defaulting to core). Exact sidebar position depends on other plugin contributions.
 
-## Verdict: VALIDATED
+## Verdict: VALIDATED (route/sidebar/API seam)
 
 ### What worked
 

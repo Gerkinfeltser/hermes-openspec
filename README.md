@@ -162,8 +162,10 @@ Replace the deployed `plugin.js` with commit `059282c` (the validated spike). Th
 ### Tests
 
 ```bash
-node tests/desktop-plugin-smoke.mjs        # 88 tests: contract, helpers, UI verification
+node tests/desktop-plugin-smoke.mjs          # 244 tests: contract, helpers, UI verification
+node tests/lane-override-behavior.mjs        # 23 tests: lane override/source/phase behavior
 node spikes/001-desktop-route-api/smoke.mjs # 36 tests: legacy seam validation
+python3 -m pytest -q                         # 55 host-integrated Python tests
 ```
 
 ### Runtime constraints
