@@ -202,6 +202,15 @@ function hasDiffMode(data, mode) {
   return false
 }
 
+function effectiveDiffMode(desired, data) {
+  if (hasDiffMode(data, desired)) return desired
+  var fallback = ['semantic', 'split', 'raw']
+  for (var i = 0; i < fallback.length; i++) {
+    if (hasDiffMode(data, fallback[i])) return fallback[i]
+  }
+  return desired
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // API adapter — read-only, namespace-scoped
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -315,12 +324,15 @@ function CardTaskFraction({ item }) {
 }
 
 function CardArtifacts({ item }) {
-  var artifacts = item.artifacts || item.artifactNames
-  if (!artifacts || artifacts.length === 0) return null
-  var names = Array.isArray(artifacts) ? artifacts : Object.keys(artifacts)
+  var badges = []
+  if (item.hasProposal) badges.push({ label: 'proposal', color: '#60a5fa' })
+  if (item.hasTasks) badges.push({ label: 'tasks', color: '#34d399' })
+  if (item.hasDesign) badges.push({ label: 'design', color: '#a78bfa' })
+  if (item.hasSpecs) badges.push({ label: 'specs', color: '#fbbf24' })
+  if (badges.length === 0) return null
   return jsxs('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' },
-    children: names.map(function(name, i) {
-      return jsx(Badge, { variant: 'secondary', style: { fontSize: '10px' }, children: name }, i)
+    children: badges.map(function(b, i) {
+      return jsx(Badge, { variant: 'secondary', style: { fontSize: '10px', color: b.color }, children: b.label }, i)
     })
   })
 }
@@ -396,7 +408,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
   var [activeTab, setActiveTab] = React.useState(null)
 
   if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load change', description: query.error.message }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load change', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
 
   var data = query.data || {}
   var tabs = []
@@ -463,7 +475,7 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
   })
 
   if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load idea', description: query.error.message }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load idea', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
 
   var data = query.data || {}
   var title = idea.title || idea.name || 'Idea Detail'
@@ -486,6 +498,7 @@ function SpecsDetailView({ specs }) {
 
   if (!specs || specs.length === 0) return jsx(EmptyState, { title: 'No specs', description: 'No spec changes in this change.' })
   var spec = specs[selectedIdx] || specs[0]
+  var effMode = effectiveDiffMode(diffMode, spec)
 
   return jsxs('div', { style: { padding: '12px' }, children: [
     specs.length > 1 ? jsxs('div', { style: { marginBottom: '8px' }, children: [
@@ -499,13 +512,13 @@ function SpecsDetailView({ specs }) {
     spec.path ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', marginBottom: '8px', fontFamily: 'monospace' }, children: spec.path }) : null,
     spec.status ? jsx(Badge, { variant: 'outline', style: { marginBottom: '8px' }, children: spec.status }) : null,
     hasDiffMode(spec, 'semantic') || hasDiffMode(spec, 'split') || hasDiffMode(spec, 'raw') ? jsxs('div', { style: { display: 'flex', gap: '4px', marginBottom: '8px' }, children: [
-      hasDiffMode(spec, 'semantic') ? jsx(Button, { variant: diffMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
-      hasDiffMode(spec, 'split') ? jsx(Button, { variant: diffMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
-      hasDiffMode(spec, 'raw') ? jsx(Button, { variant: diffMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
+      hasDiffMode(spec, 'semantic') ? jsx(Button, { variant: effMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
+      hasDiffMode(spec, 'split') ? jsx(Button, { variant: effMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
+      hasDiffMode(spec, 'raw') ? jsx(Button, { variant: effMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
     ] }) : null,
-    diffMode === 'semantic' && hasDiffMode(spec, 'semantic') ? jsx(SemanticDiffView, { data: spec.semantic_diff }) : null,
-    diffMode === 'split' && hasDiffMode(spec, 'split') ? jsx(SplitDiffView, { before: spec.before, after: spec.after }) : null,
-    diffMode === 'raw' && hasDiffMode(spec, 'raw') ? jsx(RawDiffView, { diff: spec.diff || spec.raw_diff }) : null,
+    effMode === 'semantic' && hasDiffMode(spec, 'semantic') ? jsx(SemanticDiffView, { data: spec.semantic_diff }) : null,
+    effMode === 'split' && hasDiffMode(spec, 'split') ? jsx(SplitDiffView, { before: spec.before, after: spec.after }) : null,
+    effMode === 'raw' && hasDiffMode(spec, 'raw') ? jsx(RawDiffView, { diff: spec.diff || spec.raw_diff }) : null,
     spec.content ? jsx(MarkdownView, { content: spec.content }) : null,
   ] })
 }
@@ -514,16 +527,48 @@ function SpecsDetailView({ specs }) {
 // Diff views
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function normalizeSemanticGroups(data) {
+  if (!data) return []
+  // Legacy flat groups array (data.groups)
+  if (data.groups && Array.isArray(data.groups)) return data.groups
+  // Backend contract: {status, requirements: {added, modified, removed, unchanged}}
+  var reqs = data.requirements
+  if (!reqs || typeof reqs !== 'object' || Array.isArray(reqs)) return []
+  var items = []
+  var added = reqs.added || []
+  var modified = reqs.modified || []
+  var removed = reqs.removed || []
+  for (var i = 0; i < added.length; i++) {
+    var a = added[i]
+    items.push({ label: 'Added', name: a.name || '', description: a.description || '', color: 'var(--primary, #4caf50)' })
+  }
+  for (var j = 0; j < modified.length; j++) {
+    var m = modified[j]
+    var beforeDesc = m.before && typeof m.before === 'object' ? (m.before.description || '') : String(m.before || '')
+    var afterDesc = m.after && typeof m.after === 'object' ? (m.after.description || '') : String(m.after || '')
+    items.push({ label: 'Modified', name: m.name || '', description: '', before: beforeDesc, after: afterDesc, color: 'var(--warning, #ff9800)' })
+  }
+  for (var k = 0; k < removed.length; k++) {
+    var r = removed[k]
+    items.push({ label: 'Removed', name: r.name || '', description: r.description || '', color: 'var(--destructive, #f44336)' })
+  }
+  return items
+}
+
 function SemanticDiffView({ data }) {
   if (!data) return null
-  var groups = data.groups || data.requirements || []
+  var items = normalizeSemanticGroups(data)
   return jsxs('div', { style: { padding: '8px' }, children: [
     jsx('div', { style: { fontWeight: 600, marginBottom: '8px', color: 'var(--foreground, #e0e0e0)' }, children: 'Semantic Changes' }),
-    groups.map(function(group, i) {
+    items.map(function(item, i) {
       return jsxs('div', { style: { marginBottom: '8px', padding: '8px', background: 'var(--card-background, #1a1a1a)', borderRadius: '4px', border: '1px solid var(--ui-border, #333)' }, children: [
-        group.name || group.title ? jsx('div', { style: { fontWeight: 500, marginBottom: '4px', color: 'var(--foreground, #e0e0e0)' }, children: group.name || group.title }) : null,
-        group.before ? jsx('div', { style: { color: 'var(--destructive, #f44336)', fontSize: '12px', marginBottom: '2px' }, children: '- ' + group.before }) : null,
-        group.after ? jsx('div', { style: { color: 'var(--primary, #4caf50)', fontSize: '12px' }, children: '+ ' + group.after }) : null,
+        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }, children: [
+          jsx('span', { style: { fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '3px', background: item.color, color: '#fff' }, children: item.label }),
+          item.name ? jsx('span', { style: { fontWeight: 500, color: 'var(--foreground, #e0e0e0)' }, children: item.name }) : null,
+        ] }),
+        item.description ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', marginBottom: '2px' }, children: item.description }) : null,
+        item.before != null && item.before !== '' ? jsx('div', { style: { color: 'var(--destructive, #f44336)', fontSize: '12px', marginBottom: '2px' }, children: '- ' + item.before }) : null,
+        item.after != null && item.after !== '' ? jsx('div', { style: { color: 'var(--primary, #4caf50)', fontSize: '12px' }, children: '+ ' + item.after }) : null,
       ] }, i)
     }),
   ] })
@@ -662,7 +707,7 @@ function SpecsView({ api, sourceId }) {
       jsxs('div', { style: { flex: 1, overflow: 'auto' }, children: [
         worktree && selectedFile ? jsx(WorktreeDetailView, { sourceId: sourceId, file: selectedFile, files: files }) : null,
         !worktree && selectedFile && specQuery.isLoading ? jsx(Loader, { type: 'lemniscate-bloom' }) : null,
-        !worktree && selectedFile && specQuery.error ? jsx(ErrorState, { title: 'Failed to load spec', description: specQuery.error.message }) : null,
+        !worktree && selectedFile && specQuery.error ? jsx(ErrorState, { title: 'Failed to load spec', description: specQuery.error.message, onRetry: function() { specQuery.refetch() } }) : null,
         !worktree && selectedFile && !specQuery.isLoading && !specQuery.error ? jsx(MarkdownView, { content: specQuery.data && specQuery.data.content }) : null,
         !selectedFile ? jsx(EmptyState, { title: 'Select a file', description: 'Choose a spec file from the list to view its content.' }) : null,
       ] }),
@@ -675,6 +720,7 @@ function WorktreeDetailView({ sourceId, file, files }) {
   var [diffMode, setDiffMode] = React.useState('semantic')
 
   var data = fileInfo
+  var effMode = effectiveDiffMode(diffMode, data)
 
   return jsxs('div', { style: { padding: '12px' }, children: [
     jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }, children: [
@@ -682,13 +728,13 @@ function WorktreeDetailView({ sourceId, file, files }) {
       fileInfo.status ? jsx(Badge, { variant: 'outline', children: fileInfo.status }) : null,
     ] }),
     hasDiffMode(data, 'semantic') || hasDiffMode(data, 'split') || hasDiffMode(data, 'raw') ? jsxs('div', { style: { display: 'flex', gap: '4px', marginBottom: '12px' }, children: [
-      hasDiffMode(data, 'semantic') ? jsx(Button, { variant: diffMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
-      hasDiffMode(data, 'split') ? jsx(Button, { variant: diffMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
-      hasDiffMode(data, 'raw') ? jsx(Button, { variant: diffMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
+      hasDiffMode(data, 'semantic') ? jsx(Button, { variant: effMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
+      hasDiffMode(data, 'split') ? jsx(Button, { variant: effMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
+      hasDiffMode(data, 'raw') ? jsx(Button, { variant: effMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
     ] }) : null,
-    diffMode === 'semantic' && hasDiffMode(data, 'semantic') ? jsx(SemanticDiffView, { data: data.semantic_diff }) : null,
-    diffMode === 'split' && hasDiffMode(data, 'split') ? jsx(SplitDiffView, { before: data.before, after: data.after }) : null,
-    diffMode === 'raw' && hasDiffMode(data, 'raw') ? jsx(RawDiffView, { diff: data.diff || data.raw_diff }) : null,
+    effMode === 'semantic' && hasDiffMode(data, 'semantic') ? jsx(SemanticDiffView, { data: data.semantic_diff }) : null,
+    effMode === 'split' && hasDiffMode(data, 'split') ? jsx(SplitDiffView, { before: data.before, after: data.after }) : null,
+    effMode === 'raw' && hasDiffMode(data, 'raw') ? jsx(RawDiffView, { diff: data.diff || data.raw_diff }) : null,
     !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && data.content ? jsx(MarkdownView, { content: data.content }) : null,
     !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && !data.content ? jsx(EmptyState, { title: 'No diff data', description: 'No diff representation available for this file.' }) : null,
   ] })
@@ -706,8 +752,7 @@ function OpenSpecPage({ api }) {
 
   var [selectedSourceId, setSelectedSourceId] = React.useState(null)
   var [view, setView] = React.useState('work')
-  var [selectedItem, setSelectedItem] = React.useState(null)
-  var [detailType, setDetailType] = React.useState(null)
+  var [selectedItem, setSelectedItem] = React.useState(null) // {item, sourceId, type}
 
   // Auto-select first valid source
   var sources = (sourcesQuery.data && sourcesQuery.data.sources) || []
@@ -721,7 +766,6 @@ function OpenSpecPage({ api }) {
   // Close detail on source change
   React.useEffect(function() {
     setSelectedItem(null)
-    setDetailType(null)
   }, [selectedSourceId])
 
   var selectedSource = sources.find(function(s) { return s.id === selectedSourceId }) || null
@@ -731,8 +775,7 @@ function OpenSpecPage({ api }) {
   if (sources.length === 0) return jsx(EmptyState, { title: 'No sources registered', description: 'Register a source via the CLI or dashboard to get started.' })
 
   var onSelectItem = function(item) {
-    setSelectedItem(item)
-    setDetailType(item._type || 'change')
+    setSelectedItem({ item: item, sourceId: selectedSourceId, type: item._type || 'change' })
   }
 
   return jsxs('div', { className: cn('flex flex-col h-full'), children: [
@@ -782,9 +825,9 @@ function OpenSpecPage({ api }) {
         : jsx(SpecsView, { api: api, sourceId: selectedSource.id })
     ) : selectedSource && selectedSource.valid === false ? null : jsx(EmptyState, { title: 'Select a source', description: 'Choose a source to view its OpenSpec project.' }) }),
 
-    // Detail dialog
-    selectedItem && detailType === 'change' ? jsx(ChangeDetailDialog, { api: api, sourceId: selectedSourceId, change: selectedItem, onClose: function() { setSelectedItem(null) } }) : null,
-    selectedItem && detailType === 'idea' ? jsx(IdeaDetailDialog, { api: api, sourceId: selectedSourceId, idea: selectedItem, onClose: function() { setSelectedItem(null) } }) : null,
+    // Detail dialog — synchronous gate: reject stale item from different source
+    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'change' && selectedSource && selectedSource.valid !== false ? jsx(ChangeDetailDialog, { api: api, sourceId: selectedSourceId, change: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
+    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'idea' && selectedSource && selectedSource.valid !== false ? jsx(IdeaDetailDialog, { api: api, sourceId: selectedSourceId, idea: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
   ] })
 }
 
@@ -833,6 +876,8 @@ export const __test = Object.freeze({
   classifyState: classifyState,
   classifyDiffLine: classifyDiffLine,
   hasDiffMode: hasDiffMode,
+  normalizeSemanticGroups: normalizeSemanticGroups,
+  effectiveDiffMode: effectiveDiffMode,
   isSafeUrl: isSafeUrl,
   renderInline: renderInline,
   MarkdownElement: MarkdownElement,

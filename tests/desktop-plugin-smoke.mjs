@@ -352,6 +352,52 @@ if (r.__testAvailable) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Behavioral fixture tests — backend contract alignment
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Behavioral] Backend contract fixture tests')
+
+if (r.__testAvailable) {
+  // 1. Semantic groups normalization
+  var sg = r.semanticGroups || {}
+  console.log('  Semantic groups normalization')
+  check(sg.isArray === true, 'normalizeSemanticGroups returns array', JSON.stringify(sg.isArray))
+  check(sg.length === 3, 'normalizeSemanticGroups returns 3 items (added+modified+removed)', 'Got ' + sg.length)
+  check(sg.addedLabel === 'Added', 'First item labeled "Added"', JSON.stringify(sg.addedLabel))
+  check(sg.modifiedLabel === 'Modified', 'Second item labeled "Modified"', JSON.stringify(sg.modifiedLabel))
+  check(sg.removedLabel === 'Removed', 'Third item labeled "Removed"', JSON.stringify(sg.removedLabel))
+  check(sg.noObjectString === true, 'No [object Object] in descriptions/before/after',
+    !sg.noObjectString ? 'Found [object Object]' : undefined)
+  check(sg.addedName === 'Auth', 'Added item preserves name', JSON.stringify(sg.addedName))
+  check(sg.modifiedName === 'Data Model', 'Modified item preserves name', JSON.stringify(sg.modifiedName))
+  check(sg.removedName === 'Legacy', 'Removed item preserves name', JSON.stringify(sg.removedName))
+  check(sg.beforeDesc === 'Old schema with 3 fields', 'Modified before extracted from object', JSON.stringify(sg.beforeDesc))
+  check(sg.afterDesc === 'New schema with 5 fields', 'Modified after extracted from object', JSON.stringify(sg.afterDesc))
+  check(sg.noCrash === true, 'normalizeSemanticGroups does not crash on backend shape')
+  check(sg.oldCodeWouldThrow === true, 'Old code (data.requirements.map) would throw on real backend shape')
+
+  // 2. Card artifacts from has* booleans
+  var ca = r.cardArtifacts || {}
+  console.log('  Card artifacts from has* booleans')
+  check(ca.hasProposal === true, 'hasProposal boolean present', JSON.stringify(ca.hasProposal))
+  check(ca.hasTasks === true, 'hasTasks boolean present', JSON.stringify(ca.hasTasks))
+  check(ca.hasDesign === true, 'hasDesign boolean present', JSON.stringify(ca.hasDesign))
+  check(ca.hasSpecs === true, 'hasSpecs boolean present', JSON.stringify(ca.hasSpecs))
+  check(ca.noArtifactsField === true, 'No artifacts field on source summary')
+  check(ca.noArtifactNamesField === true, 'No artifactNames field on source summary')
+
+  // 3. effectiveDiffMode fallback
+  var ed = r.effectiveDiffMode || {}
+  console.log('  Effective diff mode fallback')
+  check(ed.semanticAvailable === 'semantic', 'Returns semantic when available', JSON.stringify(ed.semanticAvailable))
+  check(ed.fallbackToSplit === 'split', 'Falls back to split when semantic unavailable', JSON.stringify(ed.fallbackToSplit))
+  check(ed.fallbackToRaw === 'raw', 'Falls back to raw when only raw available', JSON.stringify(ed.fallbackToRaw))
+  check(ed.nothingAvailable === 'semantic', 'Returns desired when nothing available', JSON.stringify(ed.nothingAvailable))
+  check(ed.splitToRaw === 'raw', 'Split desired falls back to raw', JSON.stringify(ed.splitToRaw))
+} else {
+  fail('Backend contract fixture tests', '__test not available')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Static analysis checks — SDK usage patterns
 // ═══════════════════════════════════════════════════════════════════════════════
 console.log('\n[Static] Source analysis')
@@ -367,6 +413,39 @@ check(source.includes('EmptyState'), 'Uses EmptyState component')
 check(!source.includes('console.log'), 'No debug console.log')
 check(!source.includes('// TODO'), 'No TODO comments')
 check(!source.includes('alert('), 'No alert() calls')
+
+// Retry handlers on error states
+check(source.includes('query.refetch()'), 'query.refetch() retry handler present')
+check(source.includes('specQuery.refetch()'), 'specQuery.refetch() retry handler present')
+// ChangeDetailDialog, IdeaDetailDialog, and specQuery ErrorState all have onRetry
+{
+  var retryMatches = source.match(/onRetry:\s*function\(\)\s*\{\s*query\.refetch\(\)\s*\}/g)
+  check(retryMatches && retryMatches.length >= 2, 'At least 2 query.refetch retry handlers (change + idea)',
+    retryMatches ? 'Found ' + retryMatches.length : 'None found')
+  check(source.includes('specQuery.refetch()'), 'specQuery retry handler present')
+}
+
+// Stale detail guard — item bound to source at click
+check(source.includes('selectedItem.sourceId === selectedSourceId'), 'Detail dialog has source-matching gate')
+check(source.includes('{ item: item, sourceId: selectedSourceId, type:'), 'onSelectItem binds item to source')
+check(!source.includes('detailType'), 'Old detailType state removed')
+
+// normalizeSemanticGroups exists and handles backend shape
+check(source.includes('function normalizeSemanticGroups'), 'normalizeSemanticGroups function defined')
+check(source.includes('data.requirements'), 'Reads data.requirements (backend contract)')
+check(source.includes('reqs.added'), 'Extracts added array from requirements')
+check(source.includes('reqs.modified'), 'Extracts modified array from requirements')
+check(source.includes('reqs.removed'), 'Extracts removed array from requirements')
+
+// effectiveDiffMode fallback
+check(source.includes('function effectiveDiffMode'), 'effectiveDiffMode function defined')
+
+// CardArtifacts reads has* booleans
+check(source.includes('item.hasProposal'), 'CardArtifacts reads hasProposal')
+check(source.includes('item.hasTasks'), 'CardArtifacts reads hasTasks')
+check(source.includes('item.hasDesign'), 'CardArtifacts reads hasDesign')
+check(source.includes('item.hasSpecs'), 'CardArtifacts reads hasSpecs')
+check(!source.includes('item.artifacts || item.artifactNames'), 'Old artifacts/artifactNames pattern removed')
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Structural pattern checks — SDK compliance

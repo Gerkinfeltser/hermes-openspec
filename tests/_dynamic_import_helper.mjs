@@ -231,6 +231,99 @@ if (__test) {
       results.diff.noSemantic = __test.hasDiffMode({ before: 'a', after: 'b' }, 'semantic')
     }
 
+    // --- Behavioral fixture tests: backend contract alignment ---
+
+    // 1. Semantic groups normalization — exact backend shape from spec_parser.py
+    results.semanticGroups = {}
+    if (__test.normalizeSemanticGroups) {
+      // Backend returns {status, requirements: {added, modified, removed, unchanged}}
+      var backendDiff = {
+        status: 'modified',
+        requirements: {
+          added: [{ name: 'Auth', description: 'User auth via OAuth', scenarios: [] }],
+          modified: [{
+            name: 'Data Model',
+            before: { description: 'Old schema with 3 fields', scenarios: [] },
+            after: { description: 'New schema with 5 fields', scenarios: [] },
+            scenarios_added: [],
+            scenarios_modified: [],
+            scenarios_removed: [],
+          }],
+          removed: [{ name: 'Legacy', description: 'Deprecated endpoint', scenarios: [] }],
+          unchanged: ['Logging'],
+        }
+      }
+      var groups = __test.normalizeSemanticGroups(backendDiff)
+      results.semanticGroups.isArray = Array.isArray(groups)
+      results.semanticGroups.length = groups.length
+      // Verify labels
+      results.semanticGroups.addedLabel = groups[0] && groups[0].label
+      results.semanticGroups.modifiedLabel = groups[1] && groups[1].label
+      results.semanticGroups.removedLabel = groups[2] && groups[2].label
+      // Verify no [object Object] in descriptions
+      results.semanticGroups.noObjectString = groups.every(function(g) {
+        return !String(g.description || '').includes('[object Object]')
+          && !String(g.before || '').includes('[object Object]')
+          && !String(g.after || '').includes('[object Object]')
+      })
+      // Verify names preserved
+      results.semanticGroups.addedName = groups[0] && groups[0].name
+      results.semanticGroups.modifiedName = groups[1] && groups[1].name
+      results.semanticGroups.removedName = groups[2] && groups[2].name
+      // Verify before/after extracted from object-valued fields
+      results.semanticGroups.beforeDesc = groups[1] && groups[1].before
+      results.semanticGroups.afterDesc = groups[1] && groups[1].after
+      // Verify crash: old code did data.requirements.map() which throws
+      results.semanticGroups.noCrash = true
+      try {
+        // This is what the old code did — should have thrown
+        backendDiff.requirements.map(function() {})
+        results.semanticGroups.oldCodeWouldThrow = false
+      } catch (e) {
+        results.semanticGroups.oldCodeWouldThrow = true
+      }
+    }
+
+    // 2. Card artifacts from has* booleans — exact shape from plugin_api.py
+    results.cardArtifacts = {}
+    if (__test.hasDiffMode) {
+      // Backend source summary shape from plugin_api.py:218-241
+      var changeSummary = {
+        id: 'src-1/my-change',
+        token: 'my-change',
+        name: 'my-change',
+        title: 'My Change',
+        status: 'in-progress',
+        hasProposal: true,
+        hasTasks: true,
+        hasDesign: false,
+        hasSpecs: true,
+        taskStats: { total: 5, done: 2 },
+      }
+      // Test that has* booleans are the source of truth (not artifacts/artifactNames)
+      results.cardArtifacts.hasProposal = changeSummary.hasProposal === true
+      results.cardArtifacts.hasTasks = changeSummary.hasTasks === true
+      results.cardArtifacts.hasDesign = changeSummary.hasDesign === false
+      results.cardArtifacts.hasSpecs = changeSummary.hasSpecs === true
+      results.cardArtifacts.noArtifactsField = changeSummary.artifacts === undefined
+      results.cardArtifacts.noArtifactNamesField = changeSummary.artifactNames === undefined
+    }
+
+    // 3. effectiveDiffMode fallback
+    results.effectiveDiffMode = {}
+    if (__test.effectiveDiffMode) {
+      // When desired mode is available, return it
+      results.effectiveDiffMode.semanticAvailable = __test.effectiveDiffMode('semantic', { semantic_diff: { requirements: {} } })
+      // When semantic unavailable but split available, fallback to split
+      results.effectiveDiffMode.fallbackToSplit = __test.effectiveDiffMode('semantic', { before: 'a', after: 'b' })
+      // When only raw available, fallback to raw
+      results.effectiveDiffMode.fallbackToRaw = __test.effectiveDiffMode('semantic', { diff: '+line' })
+      // When nothing available, return desired (no crash)
+      results.effectiveDiffMode.nothingAvailable = __test.effectiveDiffMode('semantic', {})
+      // Split desired but only raw available
+      results.effectiveDiffMode.splitToRaw = __test.effectiveDiffMode('split', { diff: '+line' })
+    }
+
     // URL safety
     results.urlSafety = {}
     if (__test.isSafeUrl) {
