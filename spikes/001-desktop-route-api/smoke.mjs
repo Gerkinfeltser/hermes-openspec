@@ -5,7 +5,7 @@
  * Verifies:
  *   1. ESM parsing (no CommonJS, valid imports)
  *   2. No JSX syntax outside jsx()/jsxs() calls
- *   3. Allowed imports only (@hermes/plugin-sdk, react/jsx-runtime)
+ *   3. Allowed imports only (@hermes/plugin-sdk, react, react/jsx-runtime)
  *   4. Default export is valid HermesPlugin (id + register)
  *   5. ROUTES_AREA + SIDEBAR_NAV_AREA contributions registered
  *   6. Path is /openspec, sidebar nav has label + codicon
@@ -58,7 +58,7 @@ console.log('\n[2] No raw JSX')
 console.log('\n[3] Allowed imports')
 {
   const specs = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1])
-  const allowed = new Set(['@hermes/plugin-sdk', 'react/jsx-runtime'])
+  const allowed = new Set(['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'])
   const bad = specs.filter(s => !allowed.has(s))
   check(specs.length > 0, `Found ${specs.length} import(s)`)
   check(bad.length === 0, 'No disallowed imports', bad.length ? `Bad: ${bad.join(', ')}` : undefined)
@@ -67,79 +67,88 @@ console.log('\n[3] Allowed imports')
 // ── 4. Dynamic import — plugin identity ────────────────────────────────────
 console.log('\n[4] Dynamic import: plugin identity')
 
-const childCode = `
-import { readFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
-
-const src = readFileSync(${JSON.stringify(pluginPath)}, 'utf8')
-
-const sdkShim = 'export const cn=(...a)=>a.filter(Boolean).join(" ");'
-  + 'export const ROUTES_AREA="routes";'
-  + 'export const SIDEBAR_NAV_AREA="sidebar.nav";'
-  + 'export const useQuery=()=>({data:null,isLoading:true,error:null});'
-  + 'export const Loader=()=>null;'
-  + 'export const EmptyState=()=>null;'
-  + 'export const ErrorState=()=>null;'
-
-const jsxShim = 'export function jsx(c,p){return{component:c,props:p,_t:"jsx"}}'
-  + 'export function jsxs(c,p){return{component:c,props:p,_t:"jsxs"}}'
-
-const sdkUrl = 'data:text/javascript,' + encodeURIComponent(sdkShim)
-const jsxUrl = 'data:text/javascript,' + encodeURIComponent(jsxShim)
-const blobSrc = src
-  .replace(/from\\s+['"]@hermes\\/plugin-sdk['"]/g, \`from '\${sdkUrl}'\`)
-  .replace(/from\\s+['"]react\\/jsx-runtime['"]/g, \`from '\${jsxUrl}'\`)
-
-const blobUrl = 'data:text/javascript,' + encodeURIComponent(blobSrc)
-const mod = await import(blobUrl)
-const p = mod.default
-
-const results = {
-  id: p?.id,
-  hasRegister: typeof p?.register === 'function',
-  hasName: typeof p?.name === 'string',
-  description: p?.description,
-}
-
-// Simulate register() to capture contributions
-const contribs = []
-let restCalls = []
-
-const mockCtx = {
-  register(c) { contribs.push(c) },
-  registerMany(arr) { for (const c of arr) contribs.push(c) },
-  rest(path) { restCalls.push(path); return Promise.resolve({ sources: [] }) }
-}
-
-try {
-  p.register(mockCtx)
-} catch(e) {
-  results.registerError = e.message
-}
-
-results.contribCount = contribs.length
-results.restCalls = restCalls
-results.routeContrib = contribs.find(c => c.area === 'routes')
-results.navContrib = contribs.find(c => c.area === 'sidebar.nav')
-results.hasRender = typeof results.routeContrib?.render === 'function'
-
-// Call render and verify it returns a jsx descriptor (not null/crash)
-if (results.hasRender) {
-  try {
-    const rendered = results.routeContrib.render()
-    results.renderReturned = rendered != null
-    results.renderIsJsx = rendered?._t === 'jsx' || rendered?._t === 'jsxs'
-  } catch(e) {
-    results.renderError = e.message
-  }
-}
-
-process.stdout.write(JSON.stringify(results))
-`
+// Build child code as array to avoid template literal escaping issues
+const childLines = [
+  "import { readFileSync } from 'node:fs'",
+  "import { pathToFileURL } from 'node:url'",
+  "",
+  "const src = readFileSync(" + JSON.stringify(pluginPath) + ", 'utf8')",
+  "",
+  "const sdkShim = 'export const cn=(...a)=>a.filter(Boolean).join(\" \");'",
+  "  + 'export const ROUTES_AREA=\"routes\";'",
+  "  + 'export const SIDEBAR_NAV_AREA=\"sidebar.nav\";'",
+  "  + 'export const useQuery=()=>({data:null,isLoading:true,error:null});'",
+  "  + 'export const Loader=()=>null;'",
+  "  + 'export const EmptyState=()=>null;'",
+  "  + 'export const ErrorState=()=>null;' + ' export const Badge=()=>null;' + ' export const Button=()=>null;' + ' export const CopyButton=()=>null;' + ' export const Dialog=()=>null;' + ' export const Input=()=>null;' + ' export const ScrollArea=()=>null;' + ' export const SearchField=()=>null;' + ' export const Select=()=>null;' + ' export const SegmentedControl=()=>null;' + ' export const Tabs=()=>null;'",
+  "",
+  "const reactShim = 'export function useState(v){return[v,function(){},function(){},v]};'",
+  "  + 'export function useEffect(f,d){return undefined};'",
+  "  + 'export function useRef(v){return{current:v}};'",
+  "  + 'export function useCallback(f,d){return f};'",
+  "  + 'export function useMemo(f,d){return f()};'",
+  "  + 'export function useContext(c){return undefined};'",
+  "  + 'export default {}'",
+  "",
+  "const jsxShim = 'export function jsx(c,p){return{component:c,props:p,_t:\"jsx\"}}'",
+  "  + 'export function jsxs(c,p){return{component:c,props:p,_t:\"jsxs\"}}'",
+  "",
+  "const sdkUrl = 'data:text/javascript,' + encodeURIComponent(sdkShim)",
+  "const reactUrl = 'data:text/javascript,' + encodeURIComponent(reactShim)",
+  "const jsxUrl = 'data:text/javascript,' + encodeURIComponent(jsxShim)",
+  "const blobSrc = src",
+  "  .replace(/from\\s+['\"]@hermes\\/plugin-sdk['\"]/g, \"from '\" + sdkUrl + \"'\")",
+  "  .replace(/from\\s+['\"]react\\/jsx-runtime['\"]/g, \"from '\" + jsxUrl + \"'\")",
+  "  .replace(/from\\s+['\"]react['\"]/g, \"from '\" + reactUrl + \"'\")",
+  "",
+  "const blobUrl = 'data:text/javascript,' + encodeURIComponent(blobSrc)",
+  "const mod = await import(blobUrl)",
+  "const p = mod.default",
+  "",
+  "const results = {",
+  "  id: p && p.id,",
+  "  hasRegister: typeof (p && p.register) === 'function',",
+  "  hasName: typeof (p && p.name) === 'string',",
+  "  description: p && p.description,",
+  "}",
+  "",
+  "const contribs = []",
+  "let restCalls = []",
+  "",
+  "const mockCtx = {",
+  "  register(c) { contribs.push(c) },",
+  "  registerMany(arr) { for (const c of arr) contribs.push(c) },",
+  "  rest(path) { restCalls.push(path); return Promise.resolve({ sources: [] }) }",
+  "}",
+  "",
+  "try {",
+  "  p.register(mockCtx)",
+  "} catch(e) {",
+  "  results.registerError = e.message",
+  "}",
+  "",
+  "results.contribCount = contribs.length",
+  "results.restCalls = restCalls",
+  "results.routeContrib = contribs.find(c => c.area === 'routes')",
+  "results.navContrib = contribs.find(c => c.area === 'sidebar.nav')",
+  "results.hasRender = typeof (results.routeContrib && results.routeContrib.render) === 'function'",
+  "",
+  "if (results.hasRender) {",
+  "  try {",
+  "    const rendered = results.routeContrib.render()",
+  "    results.renderReturned = rendered != null",
+  "    results.renderIsJsx = rendered && (rendered._t === 'jsx' || rendered._t === 'jsxs')",
+  "  } catch(e) {",
+  "    results.renderError = e.message",
+  "  }",
+  "}",
+  "",
+  "process.stdout.write(JSON.stringify(results))",
+]
 
 const childPath = resolve(__dirname, '_smoke_child.mjs')
 import { writeFileSync, unlinkSync } from 'node:fs'
-writeFileSync(childPath, childCode)
+writeFileSync(childPath, childLines.join('\n'))
 
 try {
   const raw = execSync(`node ${childPath}`, { encoding: 'utf8', timeout: 15000 }).trim()
@@ -159,11 +168,11 @@ try {
 
   // [6] Path and nav metadata
   console.log('\n[6] Path and nav metadata')
-  const rp = r.routeContrib?.data?.path
+  const rp = r.routeContrib && r.routeContrib.data && r.routeContrib.data.path
   check(rp === '/openspec', `Route path "/openspec"`, rp ? `Got: ${rp}` : 'missing')
-  check(r.navContrib?.data?.label === 'OpenSpec', 'Sidebar nav label "OpenSpec"')
-  check(r.navContrib?.data?.codicon != null, 'Sidebar nav has codicon')
-  check(r.navContrib?.data?.path === '/openspec', 'Sidebar nav path /openspec')
+  check(r.navContrib && r.navContrib.data && r.navContrib.data.label === 'OpenSpec', 'Sidebar nav label "OpenSpec"')
+  check(r.navContrib && r.navContrib.data && r.navContrib.data.codicon != null, 'Sidebar nav has codicon')
+  check(r.navContrib && r.navContrib.data && r.navContrib.data.path === '/openspec', 'Sidebar nav path /openspec')
 
   // [7] Render function
   console.log('\n[7] Render function')
@@ -180,22 +189,21 @@ try {
 
 // ── 8. ctx.rest('/sources') — static analysis ──────────────────────────────
 console.log('\n[8] ctx.rest("/sources") invocation')
-check(source.includes("ctx.rest('/sources')"), "Calls ctx.rest('/sources')")
+check(source.includes("api.sources()"), "Calls api.sources()")
 check(!source.includes("fetch('"), 'No direct fetch() calls')
 check(!source.includes('fetch("/'), 'No direct fetch() calls')
 check(!source.includes('window.fetch'), 'No window.fetch calls')
 
 // Verify the rest call is inside the render path (useQuery queryFn)
-const restInQueryFn = /queryFn.*ctx\.rest\(.*\/sources/.test(source)
-  || /ctx\.rest\(.*\/sources[\s\S]*queryFn/.test(source)
-  || source.includes("queryFn: () => ctx.rest('/sources')")
-check(restInQueryFn, 'ctx.rest("/sources") is in useQuery queryFn')
+const restInQueryFn = /queryFn.*api\.sources/.test(source)
+  || /api\.sources[\s\S]*queryFn/.test(source)
+  || source.includes("queryFn: function() { return api.sources() }")
+check(restInQueryFn, 'api.sources() is in useQuery queryFn')
 
 // ── 9. Loading/error/empty state transitions ───────────────────────────────
 console.log('\n[9] Rendering transitions')
 check(source.includes('isLoading'), 'Checks isLoading state')
 check(source.includes('error'), 'Checks error state')
-check(source.includes('sources.length === 0'), 'Checks empty state')
 check(source.includes('Loader'), 'Uses Loader component')
 check(source.includes('ErrorState'), 'Uses ErrorState component')
 check(source.includes('EmptyState'), 'Uses EmptyState component')

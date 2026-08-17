@@ -121,3 +121,53 @@ hermes-openspec/
 | `dashboard/plugin_api.py` | All backend API routes and the spec-browser logic |
 | `dashboard/manifest.json` | Tab registration, entry points |
 | `dashboard/dist/index.js` | Frontend: board, specs view, source dialogs, deep-linking |
+
+## Hermes Desktop Plugin
+
+A read-only OpenSpec project surface runs inside Hermes Desktop as a runtime plugin.
+
+### Install
+
+Copy `desktop/plugin.js` to the Hermes Desktop plugin directory:
+
+- **Windows:** `%LOCALAPPDATA%\hermes\desktop-plugins\openspec\plugin.js`
+- **Linux/macOS:** `~/.hermes/desktop-plugins/openspec/plugin.js`
+
+The plugin is discovered automatically on Desktop startup. No restart is required after the first install — the runtime watcher picks up the new module.
+
+### Enablement
+
+Plugins are disabled by default (`defaultEnabled: false`). Enable via the Desktop settings UI or by toggling the plugin in the Hermes configuration.
+
+### What it shows
+
+- **Source selector** with project counts (changes, ideas, specs)
+- **Work view** — Ideas, Draft, Todo, In Progress, Done, Archived columns with filter and archived toggle
+- **Change detail** — Proposal, Tasks, Design, Specs tabs with task progress
+- **Idea detail** — readable markdown content
+- **Specs browser** — current spec list, selected content, worktree diffs (semantic, side-by-side, raw)
+
+### Read-only scope
+
+This plugin does not expose any write controls. Source registry mutations, OpenSpec initialization, task completion, artifact editing, and file writes remain available only through the dashboard and agent tools.
+
+### Remote backend behavior
+
+All data flows through `ctx.rest()` namespace-scoped API calls. The plugin works identically when Desktop connects to a local or remote Hermes backend. No client-side code reads backend repository paths — Windows Desktop sessions never access VPS filesystem paths.
+
+### Rollback
+
+Replace the deployed `plugin.js` with commit `059282c` (the validated spike). The runtime watcher reloads the prior module without a Desktop restart.
+
+### Tests
+
+```bash
+node tests/desktop-plugin-smoke.mjs        # 88 tests: contract, helpers, UI verification
+node spikes/001-desktop-route-api/smoke.mjs # 36 tests: legacy seam validation
+```
+
+### Runtime constraints
+
+- Single uncompiled ESM file (no bundler)
+- Imports: `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only
+- No JSX syntax, new npm dependencies, direct `fetch`, or absolute API URLs
