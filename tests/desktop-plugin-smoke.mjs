@@ -437,13 +437,36 @@ if (r.__testAvailable) {
   check(source.includes("borderLeftColor: statusTone(status)"), 'BoardCard uses statusTone for left border color')
   check(source.includes("borderLeftWidth: '2px'"), 'BoardCard has 2px left border')
   check(source.includes("background: 'var(--ui-bg-elevated)'"), 'BoardCard uses elevated surface')
-  check(source.includes('border-(--ui-border-tertiary)'), 'BoardCard uses tertiary border class')
+  check(source.includes('border-(--ui-stroke-tertiary)'), 'BoardCard uses canonical stroke-tertiary border class')
   check(source.includes("backgroundColor: statusTone(status)"), 'Lane/rail status dot uses statusTone')
   check(!source.includes('#1a1a2e'), 'No hardcoded blue rail background')
-  check(!source.includes("writingMode: 'vertical-rl'"), 'No vertical writing mode in railStyle')
 } else {
   fail('Canonical status tone mapping', '__test not available')
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Focused descriptor tests — BoardColumn and BoardCard contracts (source-level)
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Descriptor] BoardColumn and BoardCard contracts')
+
+// --- Collapsed rail ---
+console.log('  Collapsed rail')
+check(source.includes("writingMode: 'vertical-rl'"), 'Collapsed rail label uses writingMode vertical-rl')
+check(source.includes("display: 'grid'") && source.includes("height: '20px'"), 'Status dot occupies 20px grid header slot')
+check(source.includes("fontVariantNumeric: 'tabular-nums'"), 'Bare count uses tabular-nums')
+check(!source.includes("justifyContent: 'center'"), 'Rail has no justifyContent center (top-flowing)')
+
+// --- Expanded lane header ---
+console.log('  Expanded lane header')
+check(!source.includes("'(' + count + ')'"), 'Expanded header count has no parentheses (bare)')
+check(source.includes("fontVariantNumeric: 'tabular-nums'"), 'Expanded header count uses tabular-nums')
+
+// --- BoardCard ---
+console.log('  BoardCard')
+check(source.includes('border-(--ui-stroke-tertiary)'), 'Card uses canonical stroke-tertiary border class')
+check(source.includes("background: 'var(--ui-bg-elevated)'"), 'Card background is elevated surface')
+check(source.includes("borderLeftWidth: '2px'"), 'Card has 2px tone left border')
+check(source.includes("borderLeftColor: statusTone(status)"), 'Card left border uses statusTone')
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Static analysis checks — SDK usage patterns

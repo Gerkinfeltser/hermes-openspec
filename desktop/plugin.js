@@ -222,7 +222,6 @@ function railStyle(label, status) {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: '4px',
     background: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)',
     borderRadius: '8px',
@@ -505,7 +504,7 @@ function BoardCard({ item, sourceId, sourceToken, onSelect }) {
   var status = normalizeStatus(item.status || item.state || item.phase)
   return jsxs('div', {
     className: cn(
-      'rounded-md border border-(--ui-border-tertiary) p-3 cursor-pointer',
+      'rounded-md border border-(--ui-stroke-tertiary) p-3 cursor-pointer',
       'hover:border-(--ui-focus-border) transition-colors',
       'flex flex-col gap-1'
     ),
@@ -544,10 +543,12 @@ function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand })
   var count = items.length
 
   if (collapsed) {
-    return jsx('div', { style: railStyle(label, status), onClick: onExpand, title: label + (count > 0 ? ' (' + count + ')' : ''), children: [
-      jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
-      jsx('span', { style: { fontSize: '10px', fontWeight: 600, color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }, children: label }),
-      count > 0 ? jsx('span', { style: { fontSize: '9px', color: 'var(--ui-text-quaternary)' }, children: count }) : null,
+    return jsx('div', { style: railStyle(label, status), onClick: onExpand, title: label, children: [
+      jsx('span', { style: { display: 'grid', height: '20px', placeItems: 'center', flexShrink: 0 }, children: [
+        jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status) } }),
+      ] }),
+      jsx('span', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', writingMode: 'vertical-rl' }, children: label }),
+      count > 0 ? jsx('span', { style: { fontSize: '10px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
     ] })
   }
 
@@ -556,7 +557,7 @@ function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand })
       jsxs('span', { style: { display: 'flex', alignItems: 'center', gap: '6px' }, children: [
         jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
         jsx('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em' }, children: label }),
-        count > 0 ? jsx('span', { style: { fontSize: '12px', color: 'var(--ui-text-quaternary)' }, children: '(' + count + ')' }) : null,
+        count > 0 ? jsx('span', { style: { fontSize: '12px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
       ] }),
       jsx('button', { onClick: onExpand, title: 'Collapse ' + label, style: { background: 'none', border: 'none', color: 'var(--muted-foreground, #888)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }, children: '\u2013' }),
     ] }),
@@ -1096,4 +1097,6 @@ export const __test = Object.freeze({
   toggleOverride: toggleOverride,
   computeLanePhase: computeLanePhase,
   pruneStaleOverrides: pruneStaleOverrides,
+  BoardColumn: BoardColumn,
+  BoardCard: BoardCard,
 })
