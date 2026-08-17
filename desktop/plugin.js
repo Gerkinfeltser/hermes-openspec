@@ -10,9 +10,10 @@
  */
 
 import {
-  Badge, Button, cn, CopyButton, Dialog, EmptyState, ErrorState,
+  Badge, Button, cn, CopyButton, Dialog, DialogContent, EmptyState, ErrorState,
   Input, Loader, ROUTES_AREA, ScrollArea, SearchField, Select,
-  SegmentedControl, SIDEBAR_NAV_AREA, Tabs, useQuery
+  SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SegmentedControl, SIDEBAR_NAV_AREA, Tabs, TabsList, TabsTrigger, useQuery
 } from '@hermes/plugin-sdk'
 import React from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
@@ -219,6 +220,13 @@ function createApi(ctx) {
 // Markdown renderer — safe subset, no innerHTML
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function isSafeUrl(url) {
+  if (!url) return false
+  var lower = String(url).toLowerCase()
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('file:')) return false
+  return true
+}
+
 function renderInline(text) {
   if (!text) return text
   var parts = []
@@ -228,9 +236,15 @@ function renderInline(text) {
   var match
   while ((match = regex.exec(remaining)) !== null) {
     if (match.index > lastIndex) parts.push(remaining.slice(lastIndex, match.index))
-    if (match[2]) parts.push({ type: 'bold', text: match[2] })
-    else if (match[3]) parts.push({ type: 'code', text: match[3] })
-    else if (match[4]) parts.push({ type: 'link', text: match[4], url: match[5] })
+    if (match[2]) parts.push(jsx('strong', { style: { fontWeight: 600 }, children: match[2] }))
+    else if (match[3]) parts.push(jsx('code', { style: { background: 'var(--editor-background, #1e1e1e)', padding: '1px 4px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '0.9em' }, children: match[3] }))
+    else if (match[4]) {
+      if (isSafeUrl(match[5])) {
+        parts.push(jsx('a', { href: match[5], target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--link-foreground, #4fc3f7)', textDecoration: 'underline' }, children: match[4] }))
+      } else {
+        parts.push(jsx('span', { style: { color: 'var(--muted-foreground, #888)' }, children: match[4] + ' [unsafe link]' }))
+      }
+    }
     lastIndex = match.index + match[0].length
   }
   if (lastIndex < remaining.length) parts.push(remaining.slice(lastIndex))
@@ -239,6 +253,8 @@ function renderInline(text) {
 
 function MarkdownElement(el) {
   if (typeof el === 'string') return el
+  if (typeof el === 'number') return el
+  if (el && (el.type || el._t)) return el
   if (!el || !el.type) return null
   switch (el.type) {
     case 'heading':
@@ -371,8 +387,10 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
     queryFn: function() { return api.change(sourceId, change.name || change.token) }
   })
 
-  if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(Loader, { type: 'lemniscate-bloom' }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(ErrorState, { title: 'Failed to load change', description: query.error.message }) })
+  var [activeTab, setActiveTab] = React.useState(null)
+
+  if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load change', description: query.error.message }) }) })
 
   var data = query.data || {}
   var tabs = []
@@ -381,11 +399,13 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
   if (data.design) tabs.push({ key: 'design', label: 'Design', content: jsx(MarkdownView, { content: data.design }) })
   if (data.specs && data.specs.length > 0) tabs.push({ key: 'specs', label: 'Specs', content: jsx(SpecsDetailView, { specs: data.specs }) })
 
+  var currentTab = activeTab || (tabs.length > 0 ? tabs[0].key : null)
+
   var title = change.title || change.name || 'Change Detail'
   var token = change.token || change.name || ''
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
-    jsxs('div', { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+    jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
       jsxs('div', { style: { marginBottom: '12px' }, children: [
         jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
@@ -393,9 +413,9 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
           data.taskStats ? jsx(Badge, { variant: 'outline', children: data.taskStats.done + '/' + data.taskStats.total + ' tasks' }) : null,
         ] }),
       ] }),
-      tabs.length > 0 ? jsx(Tabs, { defaultValue: tabs[0].key, children: [
-        jsx(Tabs.List, { children: tabs.map(function(t) { return jsx(Tabs.Trigger, { value: t.key, children: t.label }, t.key) }) }),
-        tabs.map(function(t) { return jsx(Tabs.Content, { value: t.key, children: t.content }, t.key) }),
+      tabs.length > 0 ? jsxs(Tabs, { value: currentTab, onValueChange: setActiveTab, children: [
+        jsx(TabsList, { children: tabs.map(function(t) { return jsx(TabsTrigger, { value: t.key, children: t.label }, t.key) }) }),
+        tabs.map(function(t) { return currentTab === t.key ? jsx('div', { key: t.key }, t.content) : null }),
       ] }) : jsx(EmptyState, { title: 'No artifacts', description: 'This change has no proposal, tasks, design, or spec content.' }),
     ] }),
   ] })
@@ -436,14 +456,14 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
     queryFn: function() { return api.idea(sourceId, idea.name || idea.token) }
   })
 
-  if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(Loader, { type: 'lemniscate-bloom' }) })
-  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(ErrorState, { title: 'Failed to load idea', description: query.error.message }) })
+  if (query.isLoading) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(Loader, { type: 'lemniscate-bloom' }) }) })
+  if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(ErrorState, { title: 'Failed to load idea', description: query.error.message }) }) })
 
   var data = query.data || {}
   var title = idea.title || idea.name || 'Idea Detail'
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
-    jsxs('div', { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+    jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
       jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 12px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
       jsx(MarkdownView, { content: data.content }),
     ] }),
@@ -584,6 +604,11 @@ function SpecsView({ api, sourceId }) {
 
   var [selectedFile, setSelectedFile] = React.useState(null)
 
+  // Reset selected file when source changes to avoid stale old-source requests
+  React.useEffect(function() {
+    setSelectedFile(null)
+  }, [sourceId])
+
   var specQuery = useQuery({
     queryKey: ['openspec', 'spec', sourceId, selectedFile],
     queryFn: function() { return api.spec(sourceId, selectedFile) },
@@ -626,7 +651,7 @@ function SpecsView({ api, sourceId }) {
         }),
       ] }),
       jsxs('div', { style: { flex: 1, overflow: 'auto' }, children: [
-        worktree && selectedFile ? jsx(WorktreeDetailView, { api: api, sourceId: sourceId, file: selectedFile, files: files }) : null,
+        worktree && selectedFile ? jsx(WorktreeDetailView, { sourceId: sourceId, file: selectedFile, files: files }) : null,
         !worktree && selectedFile && specQuery.isLoading ? jsx(Loader, { type: 'lemniscate-bloom' }) : null,
         !worktree && selectedFile && specQuery.error ? jsx(ErrorState, { title: 'Failed to load spec', description: specQuery.error.message }) : null,
         !worktree && selectedFile && !specQuery.isLoading && !specQuery.error ? jsx(MarkdownView, { content: specQuery.data && specQuery.data.content }) : null,
@@ -636,18 +661,11 @@ function SpecsView({ api, sourceId }) {
   ] })
 }
 
-function WorktreeDetailView({ api, sourceId, file, files }) {
+function WorktreeDetailView({ sourceId, file, files }) {
   var fileInfo = files.find(function(f) { return (f.path || f.name || f) === file }) || {}
-  var query = useQuery({
-    queryKey: ['openspec', 'worktree-detail', sourceId, file],
-    queryFn: function() { return api.spec(sourceId, file) },
-  })
-
-  if (query.isLoading) return jsx(Loader, { type: 'lemniscate-bloom' })
-  if (query.error) return jsx(ErrorState, { title: 'Failed to load diff', description: query.error.message })
-
-  var data = query.data || {}
   var [diffMode, setDiffMode] = React.useState('semantic')
+
+  var data = fileInfo
 
   return jsxs('div', { style: { padding: '12px' }, children: [
     jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }, children: [
@@ -713,11 +731,14 @@ function OpenSpecPage({ api }) {
     jsxs('div', { style: { padding: '12px 16px', borderBottom: '1px solid var(--ui-border, #333)', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }, children: [
       jsx('h1', { style: { fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--foreground, #e0e0e0)' }, children: 'OpenSpec' }),
       jsx(Select, {
-        value: selectedSourceId || '',
+        value: selectedSourceId || undefined,
         onValueChange: function(v) { setSelectedSourceId(v) },
-        children: sources.map(function(s) {
-          return jsx(Select.Item, { value: s.id, children: (s.name || s.id) + (s.valid === false ? ' (invalid)' : '') }, s.id)
-        })
+        children: [
+          jsx(SelectTrigger, { children: jsx(SelectValue, { placeholder: 'Select source' }) }),
+          jsx(SelectContent, { children: sources.map(function(s) {
+            return jsx(SelectItem, { value: s.id, children: (s.name || s.id) + (s.valid === false ? ' (invalid)' : '') }, s.id)
+          }) })
+        ]
       }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: function() { sourcesQuery.refetch() }, children: 'Refresh' }),
       selectedSource && selectedSource.openspec && selectedSource.openspec.counts ? jsxs('div', { style: { display: 'flex', gap: '6px', fontSize: '12px', color: 'var(--muted-foreground, #888)' }, children: [
@@ -731,10 +752,10 @@ function OpenSpecPage({ api }) {
     // View switch
     jsx('div', { style: { padding: '8px 16px', borderBottom: '1px solid var(--ui-border, #333)' }, children: jsx(SegmentedControl, {
       value: view,
-      onValueChange: setView,
-      children: [
-        jsx(SegmentedControl.Item, { value: 'work', children: 'Work' }),
-        jsx(SegmentedControl.Item, { value: 'specs', children: 'Specs' }),
+      onChange: setView,
+      options: [
+        { id: 'work', label: 'Work' },
+        { id: 'specs', label: 'Specs' },
       ]
     }) }),
 
@@ -786,7 +807,7 @@ var plugin = {
 }
 
 export default plugin
-export const __test = {
+export const __test = Object.freeze({
   sourcesPath: sourcesPath,
   changePath: changePath,
   ideaPath: ideaPath,
@@ -803,4 +824,5 @@ export const __test = {
   classifyState: classifyState,
   classifyDiffLine: classifyDiffLine,
   hasDiffMode: hasDiffMode,
-}
+  isSafeUrl: isSafeUrl,
+})

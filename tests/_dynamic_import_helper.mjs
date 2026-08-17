@@ -15,8 +15,9 @@ const src = readFileSync(pluginPath, 'utf8')
 const sdkExports = [
   'cn', 'useQuery',
   'Loader', 'EmptyState', 'ErrorState', 'Badge', 'Button',
-  'CopyButton', 'Dialog', 'Input', 'ScrollArea', 'SearchField',
-  'Select', 'SegmentedControl', 'Tabs'
+  'CopyButton', 'Dialog', 'DialogContent', 'Input', 'ScrollArea', 'SearchField',
+  'Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue',
+  'SegmentedControl', 'Tabs', 'TabsList', 'TabsTrigger'
 ].map(n => 'export const ' + n + '=(...a)=>a').join(';')
 // ROUTES_AREA and SIDEBAR_NAV_AREA are string constants, not functions
 const sdkShim = sdkExports
@@ -216,6 +217,37 @@ if (__test) {
       results.diff.hasSplit = __test.hasDiffMode({ before: 'a', after: 'b' }, 'split')
       results.diff.hasRaw = __test.hasDiffMode({ diff: '+line' }, 'raw')
       results.diff.noSemantic = __test.hasDiffMode({ before: 'a', after: 'b' }, 'semantic')
+    }
+
+    // URL safety
+    results.urlSafety = {}
+    if (__test.isSafeUrl) {
+      results.urlSafety.httpsAllowed = __test.isSafeUrl('https://example.com')
+      results.urlSafety.httpAllowed = __test.isSafeUrl('http://example.com')
+      results.urlSafety.relativeAllowed = __test.isSafeUrl('/path/to/page')
+      results.urlSafety.javascriptBlocked = !__test.isSafeUrl('javascript:alert(1)')
+      results.urlSafety.dataBlocked = !__test.isSafeUrl('data:text/html,<script>')
+      results.urlSafety.fileBlocked = !__test.isSafeUrl('file:///etc/passwd')
+      results.urlSafety.emptyBlocked = !__test.isSafeUrl('')
+      results.urlSafety.nullBlocked = !__test.isSafeUrl(null)
+    }
+
+    // __test is frozen
+    results.testFrozen = Object.isFrozen(__test)
+
+    // renderInline returns JSX (not plain objects)
+    results.inlineJsx = {}
+    if (__test.renderMarkdown) {
+      // renderMarkdown returns parsed blocks; inline processing is in MarkdownElement.
+      // Test the paragraph structure is correct.
+      var inlineResult = __test.renderMarkdown('Text with **bold** and `code` and [link](https://example.com)')
+      results.inlineJsx.isArray = Array.isArray(inlineResult)
+      results.inlineJsx.hasParagraph = inlineResult.some(function(el) { return el && el.type === 'paragraph' })
+      // Verify renderInline is used inside MarkdownElement (structural check via source)
+      // The actual JSX rendering happens at React render time; here we verify the
+      // parsed structure contains the text that renderInline will process.
+      var para = inlineResult.find(function(el) { return el && el.type === 'paragraph' })
+      results.inlineJsx.textHasInlineMarkup = para && para.text && para.text.includes('**bold**') && para.text.includes('`code`')
     }
 
   } catch (e) {

@@ -292,12 +292,35 @@ if (r.__testAvailable) {
   check(df.hasSplit === true, 'hasDiffMode split available', JSON.stringify(df.hasSplit))
   check(df.hasRaw === true, 'hasDiffMode raw available', JSON.stringify(df.hasRaw))
   check(df.noSemantic === false, 'hasDiffMode semantic unavailable when absent', JSON.stringify(df.noSemantic))
+
+  // URL safety
+  console.log('  URL safety')
+  var us = r.urlSafety || {}
+  check(us.httpsAllowed === true, 'isSafeUrl allows https', JSON.stringify(us.httpsAllowed))
+  check(us.httpAllowed === true, 'isSafeUrl allows http', JSON.stringify(us.httpAllowed))
+  check(us.relativeAllowed === true, 'isSafeUrl allows relative paths', JSON.stringify(us.relativeAllowed))
+  check(us.javascriptBlocked === true, 'isSafeUrl blocks javascript:', JSON.stringify(us.javascriptBlocked))
+  check(us.dataBlocked === true, 'isSafeUrl blocks data:', JSON.stringify(us.dataBlocked))
+  check(us.fileBlocked === true, 'isSafeUrl blocks file:', JSON.stringify(us.fileBlocked))
+  check(us.emptyBlocked === true, 'isSafeUrl blocks empty string', JSON.stringify(us.emptyBlocked))
+  check(us.nullBlocked === true, 'isSafeUrl blocks null', JSON.stringify(us.nullBlocked))
+
+  // __test is frozen
+  console.log('  __test frozen')
+  check(r.testFrozen === true, '__test object is frozen', JSON.stringify(r.testFrozen))
+
+  // renderInline returns JSX (not plain objects) — verified via source structural checks below
+  console.log('  renderInline structure')
+  var ix = r.inlineJsx || {}
+  check(ix.isArray === true, 'renderMarkdown returns array for inline test')
+  check(ix.hasParagraph === true, 'renderMarkdown produces paragraph with inline text')
+  check(ix.textHasInlineMarkup === true, 'Paragraph text preserves inline markup for renderInline')
 } else {
   fail('Spec-browser helpers', '__test not available')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Static analysis checks
+// Static analysis checks — SDK usage patterns
 // ═══════════════════════════════════════════════════════════════════════════════
 console.log('\n[Static] Source analysis')
 
@@ -312,6 +335,97 @@ check(source.includes('EmptyState'), 'Uses EmptyState component')
 check(!source.includes('console.log'), 'No debug console.log')
 check(!source.includes('// TODO'), 'No TODO comments')
 check(!source.includes('alert('), 'No alert() calls')
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Structural pattern checks — SDK compliance
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Structural] SDK usage pattern checks')
+
+// 1. DialogContent: must be imported and used inside Dialog
+check(source.includes('DialogContent'), 'DialogContent is imported from SDK')
+{
+  // Find DialogContent usage inside Dialog children (not just import)
+  const dialogContentUsage = source.match(/jsx\(DialogContent/g)
+  check(dialogContentUsage && dialogContentUsage.length >= 2,
+    'DialogContent used in Dialog children (loading + error + content)',
+    dialogContentUsage ? 'Found ' + dialogContentUsage.length + ' usages' : 'No usages found')
+}
+
+// 2. Select compound pattern: SelectTrigger, SelectValue, SelectContent, SelectItem
+check(source.includes('SelectTrigger'), 'SelectTrigger imported from SDK')
+check(source.includes('SelectValue'), 'SelectValue imported from SDK')
+check(source.includes('SelectContent'), 'SelectContent imported from SDK')
+check(source.includes('SelectItem'), 'SelectItem imported from SDK')
+// Verify Select.Item is NOT used (old pattern)
+check(!source.includes('Select.Item'), 'No Select.Item (old pattern removed)')
+// Verify SelectTrigger is used in render
+{
+  const selectTriggerUsage = source.match(/jsx\(SelectTrigger/g)
+  check(selectTriggerUsage && selectTriggerUsage.length >= 1,
+    'SelectTrigger used in render', selectTriggerUsage ? 'Found' : 'Not found')
+}
+
+// 3. SegmentedControl: options+value+onChange pattern (no SegmentedControl.Item)
+check(source.includes('onChange: setView'), 'SegmentedControl uses onChange prop')
+check(source.includes('options:'), 'SegmentedControl uses options prop')
+check(!source.includes('SegmentedControl.Item'), 'No SegmentedControl.Item (old pattern removed)')
+check(!source.includes('onValueChange: setView'), 'SegmentedControl does not use onValueChange')
+
+// 4. Tabs: TabsList + TabsTrigger (no Tabs.Content, no Tabs.List, no Tabs.Trigger)
+check(source.includes('TabsList'), 'TabsList imported from SDK')
+check(source.includes('TabsTrigger'), 'TabsTrigger imported from SDK')
+check(!source.includes('Tabs.Content'), 'No Tabs.Content (not exported by SDK)')
+check(!source.includes('Tabs.List'), 'No Tabs.List (use TabsList instead)')
+check(!source.includes('Tabs.Trigger'), 'No Tabs.Trigger (use TabsTrigger instead)')
+
+// 5. WorktreeDetailView: no useQuery, reads from files row
+{
+  const wtdStart = source.indexOf('function WorktreeDetailView')
+  // Scope to just this function (until next function definition)
+  const nextFn = source.indexOf('\nfunction ', wtdStart + 1)
+  const wtdSection = source.slice(wtdStart, nextFn > 0 ? nextFn : source.length)
+  check(!wtdSection.includes('useQuery'), 'WorktreeDetailView does not use useQuery')
+  check(wtdSection.includes('fileInfo') || wtdSection.includes('files.find'),
+    'WorktreeDetailView reads from files row directly')
+}
+
+// 6. SpecsView: resets selectedFile on sourceId change
+{
+  const specsStart = source.indexOf('function SpecsView')
+  const nextFnSpecs = source.indexOf('\nfunction ', specsStart + 1)
+  const specsSection = source.slice(specsStart, nextFnSpecs > 0 ? nextFnSpecs : source.length)
+  check(specsSection.includes('setSelectedFile(null)'),
+    'SpecsView resets selectedFile on sourceId change')
+  // Verify the effect depends on sourceId
+  const effectMatch = specsSection.match(/useEffect\([\s\S]*?\[[^\]]*sourceId/)
+  check(effectMatch, 'Reset effect depends on sourceId')
+}
+
+// 7. renderInline returns JSX elements, not plain objects
+check(source.includes("jsx('strong'") || source.includes('jsx("strong"'),
+  'renderInline produces JSX <strong> for bold')
+check(source.includes("jsx('code'") || source.includes('jsx("code"'),
+  'renderInline produces JSX <code> for inline code')
+check(source.includes("jsx('a'") || source.includes('jsx("a"'),
+  'renderInline produces JSX <a> for links')
+check(!source.includes("{ type: 'bold'"), 'renderInline does not return plain bold object')
+check(!source.includes("{ type: 'code'"), 'renderInline does not return plain code object')
+check(!source.includes("{ type: 'link'"), 'renderInline does not return plain link object')
+
+// 8. URL safety: isSafeUrl blocks dangerous schemes
+check(source.includes('isSafeUrl'), 'isSafeUrl function defined')
+check(source.includes('javascript:'), 'isSafeUrl checks javascript: scheme')
+check(source.includes('data:'), 'isSafeUrl checks data: scheme')
+check(source.includes('file:'), 'isSafeUrl checks file: scheme')
+
+// 9. __test is frozen
+check(source.includes('Object.freeze'), '__test export uses Object.freeze')
+
+// 10. DialogContent in Dialog loading/error paths (not just content)
+{
+  const dialogLoadingMatch = source.match(/Dialog.*open.*onOpenChange.*DialogContent/)
+  check(dialogLoadingMatch, 'Dialog loading state wraps content in DialogContent')
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Summary

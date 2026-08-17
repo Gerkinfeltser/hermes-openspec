@@ -47,7 +47,7 @@
 
 - [x] 7.1 Run `node --check` on a temporary `.mjs` copy of `desktop/plugin.js`; verify exit 0.
 - [x] 7.2 Run `node tests/desktop-plugin-smoke.mjs`; verify all cases pass, temporary files are removed, and command exits 0.
-- [x] 7.3 Run existing repository tests with `pytest -q`; verify exit 0 and no pre-existing suite regression.
+- [ ] 7.3 Run existing repository tests with `pytest -q`; verify exit 0 and no pre-existing suite regression.
 - [x] 7.4 Update appropriate root documentation with Desktop install path, enablement, read-only scope, remote-backend behavior, and rollback commit; verify every documented command/path exists.
 - [x] 7.5 Run `openspec validate hermes-desktop-read-surface --strict`; verify valid result after all documentation changes.
 - [x] 7.6 Review `git diff --check`, changed-file list, and working tree; verify no generated child harness, debug logs, secrets, backend changes, Hermes-core changes, or unrelated files remain.
@@ -63,5 +63,5 @@
 
 ## 9. Contribution Gate
 
-- [x] 9.1 Commit and push implementation branch only to `Gerkinfeltser/hermes-openspec`; verify remote branch SHA matches local SHA and upstream remote is unchanged.
+- [ ] 9.1 Commit and push implementation branch only to `Gerkinfeltser/hermes-openspec`; verify remote branch SHA matches local SHA and upstream remote is unchanged.
 - [ ] 9.2 After maintainer-scope approval, open an issue or draft PR describing read-only scope, runtime constraints, screenshots, tests, and excluded writes; verify no upstream contribution is opened before that approval.

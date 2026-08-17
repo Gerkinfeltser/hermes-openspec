@@ -80,7 +80,7 @@ const childLines = [
   "  + 'export const useQuery=()=>({data:null,isLoading:true,error:null});'",
   "  + 'export const Loader=()=>null;'",
   "  + 'export const EmptyState=()=>null;'",
-  "  + 'export const ErrorState=()=>null;' + ' export const Badge=()=>null;' + ' export const Button=()=>null;' + ' export const CopyButton=()=>null;' + ' export const Dialog=()=>null;' + ' export const Input=()=>null;' + ' export const ScrollArea=()=>null;' + ' export const SearchField=()=>null;' + ' export const Select=()=>null;' + ' export const SegmentedControl=()=>null;' + ' export const Tabs=()=>null;'",
+  "  + 'export const ErrorState=()=>null;' + ' export const Badge=()=>null;' + ' export const Button=()=>null;' + ' export const CopyButton=()=>null;' + ' export const Dialog=()=>null;' + ' export const DialogContent=()=>null;' + ' export const Input=()=>null;' + ' export const ScrollArea=()=>null;' + ' export const SearchField=()=>null;' + ' export const Select=()=>null;' + ' export const SelectContent=()=>null;' + ' export const SelectItem=()=>null;' + ' export const SelectTrigger=()=>null;' + ' export const SelectValue=()=>null;' + ' export const SegmentedControl=()=>null;' + ' export const Tabs=()=>null;' + ' export const TabsList=()=>null;' + ' export const TabsTrigger=()=>null;'",
   "",
   "const reactShim = 'export function useState(v){return[v,function(){},function(){},v]};'",
   "  + 'export function useEffect(f,d){return undefined};'",
