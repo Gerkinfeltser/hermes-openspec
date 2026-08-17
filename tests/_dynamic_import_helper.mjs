@@ -358,6 +358,48 @@ if (__test) {
       }
     }
 
+    // Lane layout helpers
+    results.laneLayout = {}
+    if (__test.autoCollapseEmptyLanes) {
+      var groupedMixed = { 'ideas': [], 'draft': [{ name: 'a' }], 'todo': [{ name: 'b' }], 'in-progress': [], 'done': [], 'archived': [] }
+      var collapsed = __test.autoCollapseEmptyLanes(groupedMixed, ['ideas', 'draft', 'todo', 'in-progress', 'done', 'archived'])
+      results.laneLayout.collapseEmptyWhenWork = !!collapsed['ideas']
+      results.laneLayout.expandNonEmpty = !collapsed['draft']
+      results.laneLayout.expandNonEmptyTodo = !collapsed['todo']
+      results.laneLayout.collapseInProgress = !!collapsed['in-progress']
+      results.laneLayout.collapseDone = !!collapsed['done']
+
+      // Board with no work: nothing collapses
+      var allEmpty = { 'ideas': [], 'draft': [], 'todo': [], 'in-progress': [], 'done': [], 'archived': [] }
+      var noCollapse = __test.autoCollapseEmptyLanes(allEmpty, ['ideas', 'draft', 'todo', 'in-progress', 'done', 'archived'])
+      var anyCollapsed = false
+      for (var k in noCollapse) { if (noCollapse[k]) anyCollapsed = true }
+      results.laneLayout.noWorkNoCollapse = !anyCollapsed
+    }
+    if (__test.laneWidth) {
+      results.laneLayout.expandedWidth = __test.laneWidth('draft', {})
+      results.laneLayout.collapsedWidth = __test.laneWidth('ideas', { 'ideas': true })
+      results.laneLayout.noOverridesExpanded = __test.laneWidth('draft', { 'ideas': true })
+    }
+    if (__test.LANE_EXPANDED_WIDTH) {
+      results.laneLayout.expandedIs256 = __test.LANE_EXPANDED_WIDTH === 256
+    }
+    if (__test.LANE_COLLAPSED_WIDTH) {
+      results.laneLayout.collapsedIs32 = __test.LANE_COLLAPSED_WIDTH === 32
+    }
+    if (__test.railStyle) {
+      var rs = __test.railStyle('Ideas')
+      results.laneLayout.railWidth = rs && rs.width
+      results.laneLayout.railFlexShrink = rs && rs.flexShrink
+      results.laneLayout.railCursor = rs && rs.cursor
+    }
+    if (__test.expandedStyle) {
+      var es = __test.expandedStyle()
+      results.laneLayout.expandedWidthPx = es && es.width
+      results.laneLayout.expandedFlexShrink = es && es.flexShrink
+      results.laneLayout.expandedOverflow = es && es.overflow
+    }
+
     // URL safety
     results.urlSafety = {}
     if (__test.isSafeUrl) {

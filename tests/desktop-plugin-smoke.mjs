@@ -608,6 +608,91 @@ console.log('\n[SDK] CopyButton contract: text prop, not value')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Lane layout: horizontal overflow, expanded/collapsed, auto-collapse
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Lane] Layout constants and helpers')
+
+if (r.__testAvailable) {
+  var ll = r.laneLayout || {}
+
+  // Width constants
+  console.log('  Width constants')
+  check(ll.expandedIs256 === true, 'LANE_EXPANDED_WIDTH is 256', JSON.stringify(ll.expandedIs256))
+  check(ll.collapsedIs32 === true, 'LANE_COLLAPSED_WIDTH is 32', JSON.stringify(ll.collapsedIs32))
+
+  // laneWidth helper
+  console.log('  laneWidth helper')
+  check(ll.expandedWidth === 256, 'laneWidth returns 256 when not collapsed', JSON.stringify(ll.expandedWidth))
+  check(ll.collapsedWidth === 32, 'laneWidth returns 32 when collapsed', JSON.stringify(ll.collapsedWidth))
+  check(ll.noOverridesExpanded === 256, 'laneWidth returns 256 when status not in overrides', JSON.stringify(ll.noOverridesExpanded))
+
+  // railStyle returns correct collapsed dimensions
+  console.log('  railStyle (collapsed rail)')
+  check(ll.railWidth === '32px', 'railStyle width is 32px', JSON.stringify(ll.railWidth))
+  check(ll.railFlexShrink === 0, 'railStyle flexShrink is 0', JSON.stringify(ll.railFlexShrink))
+  check(ll.railCursor === 'pointer', 'railStyle cursor is pointer', JSON.stringify(ll.railCursor))
+
+  // expandedStyle returns correct dimensions
+  console.log('  expandedStyle (expanded lane)')
+  check(ll.expandedWidthPx === '256px', 'expandedStyle width is 256px', JSON.stringify(ll.expandedWidthPx))
+  check(ll.expandedFlexShrink === 0, 'expandedStyle flexShrink is 0', JSON.stringify(ll.expandedFlexShrink))
+  check(ll.expandedOverflow === 'hidden', 'expandedStyle overflow is hidden', JSON.stringify(ll.expandedOverflow))
+
+  // autoCollapseEmptyLanes
+  console.log('  autoCollapseEmptyLanes')
+  check(ll.collapseEmptyWhenWork === true, 'Collapses empty lanes when board has work', JSON.stringify(ll.collapseEmptyWhenWork))
+  check(ll.expandNonEmpty === true, 'Does not collapse non-empty lanes', JSON.stringify(ll.expandNonEmpty))
+  check(ll.expandNonEmptyTodo === true, 'Does not collapse non-empty todo', JSON.stringify(ll.expandNonEmptyTodo))
+  check(ll.collapseInProgress === true, 'Collapses empty in-progress when work exists', JSON.stringify(ll.collapseInProgress))
+  check(ll.collapseDone === true, 'Collapses empty done when work exists', JSON.stringify(ll.collapseDone))
+  check(ll.noWorkNoCollapse === true, 'No collapse when board has no work', JSON.stringify(ll.noWorkNoCollapse))
+} else {
+  fail('Lane layout helpers', '__test not available')
+}
+
+console.log('\n[Lane] Static source checks')
+
+// Lane strip owns horizontal overflow
+check(source.includes('overflowX'), 'Lane strip has overflowX style')
+check(source.includes("'auto'"), 'overflowX uses auto value')
+
+// Lane strip constrains width
+check(source.includes('minWidth: 0'), 'Lane strip has minWidth: 0 to prevent flex blowout')
+check(source.includes('minHeight: 0'), 'Lane strip has minHeight: 0')
+
+// Expanded lane fixed width
+check(source.includes('256') || source.includes('LANE_EXPANDED_WIDTH'), 'Expanded lane uses 256px width')
+
+// Collapsed rail width
+check(source.includes("'32px'") || source.includes('LANE_COLLAPSED_WIDTH'), 'Collapsed rail uses 32px width')
+
+// Internal vertical card scrolling
+check(source.includes('overflowY'), 'Cards container has overflowY for vertical scroll')
+
+// BoardColumn accepts collapsed and onExpand props
+{
+  var bcStart = source.indexOf('function BoardColumn')
+  var bcEnd = source.indexOf('\nfunction ', bcStart + 1)
+  var bcSec = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
+  check(bcSec.includes('collapsed'), 'BoardColumn accepts collapsed prop')
+  check(bcSec.includes('onExpand'), 'BoardColumn accepts onExpand prop')
+  check(bcSec.includes('railStyle'), 'BoardColumn renders rail when collapsed')
+  check(bcSec.includes('expandedStyle'), 'BoardColumn renders expanded style when not collapsed')
+  check(bcSec.includes('data-lane'), 'Expanded lane sets data-lane attribute')
+}
+
+// WorkView manages collapse state
+{
+  var wvStart = source.indexOf('function WorkView')
+  var wvEnd = source.indexOf('\nfunction ', wvStart + 1)
+  var wvSec = source.slice(wvStart, wvEnd > 0 ? wvEnd : source.length)
+  check(wvSec.includes('manualOverrides'), 'WorkView tracks manual collapse overrides')
+  check(wvSec.includes('autoCollapseEmptyLanes'), 'WorkView uses autoCollapseEmptyLanes')
+  check(wvSec.includes('overflowX'), 'WorkView lane strip has overflowX')
+  check(!wvSec.includes('ScrollArea'), 'WorkView no longer uses ScrollArea')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════════════════════
 console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===')

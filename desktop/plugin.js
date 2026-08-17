@@ -11,7 +11,7 @@
 
 import {
   Badge, Button, cn, CopyButton, Dialog, DialogContent, EmptyState, ErrorState,
-  Input, Loader, ROUTES_AREA, ScrollArea, SearchField, Select,
+  Input, Loader, ROUTES_AREA, SearchField, Select,
   SelectContent, SelectItem, SelectTrigger, SelectValue,
   SegmentedControl, SIDEBAR_NAV_AREA, Tabs, TabsList, TabsTrigger, useQuery
 } from '@hermes/plugin-sdk'
@@ -100,6 +100,64 @@ function filterItems(items, query) {
 }
 
 function toggleArchived(current) { return !current }
+
+var LANE_EXPANDED_WIDTH = 256
+var LANE_COLLAPSED_WIDTH = 32
+
+function autoCollapseEmptyLanes(grouped, statusOrder) {
+  var totalItems = 0
+  for (var i = 0; i < statusOrder.length; i++) {
+    var s = statusOrder[i]
+    var items = grouped[s] || []
+    totalItems += items.length
+  }
+  var collapsed = {}
+  if (totalItems > 0) {
+    for (var j = 0; j < statusOrder.length; j++) {
+      var st = statusOrder[j]
+      var col = grouped[st] || []
+      if (col.length === 0) collapsed[st] = true
+    }
+  }
+  return collapsed
+}
+
+function laneWidth(status, collapsedSet) {
+  return (collapsedSet && collapsedSet[status]) ? LANE_COLLAPSED_WIDTH : LANE_EXPANDED_WIDTH
+}
+
+function railStyle(label) {
+  return {
+    width: LANE_COLLAPSED_WIDTH + 'px',
+    minWidth: LANE_COLLAPSED_WIDTH + 'px',
+    flexShrink: 0,
+    height: '100%',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '4px',
+    background: 'var(--muted-background, #1a1a2e)',
+    borderRadius: '6px',
+    padding: '4px 0',
+    writingMode: 'vertical-rl',
+    textOrientation: 'mixed',
+    overflow: 'hidden',
+  }
+}
+
+function expandedStyle() {
+  return {
+    width: LANE_EXPANDED_WIDTH + 'px',
+    minWidth: LANE_EXPANDED_WIDTH + 'px',
+    flexShrink: 0,
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  }
+}
 
 function parseTasks(content) {
   var total = 0, done = 0
@@ -391,15 +449,27 @@ var COLUMN_LABELS = {
   'archived': 'Archived',
 }
 
-function BoardColumn({ status, items, sourceId, onSelect }) {
+function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand }) {
   var label = COLUMN_LABELS[status] || status
   var sorted = sortItems(items)
-  return jsxs('div', { style: { minWidth: '220px', maxWidth: '280px', flexShrink: 0 }, children: [
-    jsxs('div', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--muted-foreground, #888)', padding: '0 4px 8px', letterSpacing: '0.05em' }, children: [
-      label,
-      items.length > 0 ? ' (' + items.length + ')' : '',
+  var count = items.length
+
+  if (collapsed) {
+    return jsx('div', { style: railStyle(label), onClick: onExpand, title: label + (count > 0 ? ' (' + count + ')' : ''), children: [
+      jsx('span', { style: { fontSize: '10px', fontWeight: 600, color: 'var(--muted-foreground, #aaa)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }, children: label }),
+      count > 0 ? jsx('span', { style: { fontSize: '9px', color: 'var(--primary, #4caf50)' }, children: count }) : null,
+    ] })
+  }
+
+  return jsxs('div', { style: expandedStyle(), 'data-lane': status, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 8px' }, children: [
+      jsxs('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--muted-foreground, #888)', letterSpacing: '0.05em' }, children: [
+        label,
+        count > 0 ? ' (' + count + ')' : '',
+      ] }),
+      jsx('button', { onClick: onExpand, title: 'Collapse ' + label, style: { background: 'none', border: 'none', color: 'var(--muted-foreground, #888)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }, children: '\u2013' }),
     ] }),
-    jsxs('div', { className: cn('flex flex-col gap-2'), children: sorted.map(function(item) {
+    jsxs('div', { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }, children: sorted.map(function(item) {
       return jsx(BoardCard, {
         item: item,
         sourceId: sourceId,
@@ -631,28 +701,57 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
 
   var [filter, setFilter] = React.useState('')
   var [showArchived, setShowArchived] = React.useState(true)
+  var [manualOverrides, setManualOverrides] = React.useState({})
 
   var filtered = filterItems(allItems, filter)
   var grouped = groupByStatus(filtered, showArchived)
+  var autoCollapsed = autoCollapseEmptyLanes(grouped, STATUS_ORDER)
 
-  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }, children: [
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '0 4px' }, children: [
+  // Merge auto-collapse with manual overrides: manual overrides always win,
+  // but clear stale overrides when lane gains/loses items
+  var collapsedSet = {}
+  for (var ci = 0; ci < STATUS_ORDER.length; ci++) {
+    var s = STATUS_ORDER[ci]
+    if (manualOverrides[s] !== undefined) {
+      collapsedSet[s] = manualOverrides[s]
+    } else {
+      collapsedSet[s] = !!autoCollapsed[s]
+    }
+  }
+
+  function toggleCollapse(status) {
+    setManualOverrides(function(prev) {
+      var next = Object.assign({}, prev)
+      if (next[status] !== undefined) {
+        delete next[status]
+      } else {
+        next[status] = !autoCollapsed[status]
+      }
+      return next
+    })
+  }
+
+  var visibleStatuses = showArchived ? STATUS_ORDER : STATUS_ORDER.filter(function(s) { return s !== 'archived' })
+
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden', minWidth: 0, minHeight: 0 }, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '0 4px', flexShrink: 0 }, children: [
       jsx(Input, { placeholder: 'Filter by title, token, or name...', value: filter, onChange: function(e) { setFilter(e.target.value) }, style: { flex: 1 } }),
       jsxs('label', { style: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--muted-foreground, #888)', cursor: 'pointer', whiteSpace: 'nowrap' }, children: [
         jsx('input', { type: 'checkbox', checked: showArchived, onChange: function(e) { setShowArchived(e.target.checked) } }),
         'Archived',
       ] }),
     ] }),
-    jsx(ScrollArea, { style: { flex: 1 }, children: jsxs('div', { style: { display: 'flex', gap: '12px', paddingBottom: '8px' }, children: STATUS_ORDER.map(function(status) {
+    jsx('div', { style: { display: 'flex', gap: '8px', flex: 1, overflowX: 'auto', overflowY: 'hidden', minWidth: 0, minHeight: 0, paddingBottom: '8px' }, children: visibleStatuses.map(function(status) {
       var items = grouped[status] || []
-      if (!showArchived && status === 'archived') return null
       return jsx(BoardColumn, {
         status: status,
         items: items,
         sourceId: source.id,
         onSelect: onSelectItem,
+        collapsed: !!collapsedSet[status],
+        onExpand: function() { toggleCollapse(status) },
       }, status)
-    }) }) }),
+    }) }),
   ] })
 }
 
@@ -897,4 +996,10 @@ export const __test = Object.freeze({
   renderInline: renderInline,
   MarkdownElement: MarkdownElement,
   RetryErrorState: RetryErrorState,
+  autoCollapseEmptyLanes: autoCollapseEmptyLanes,
+  laneWidth: laneWidth,
+  railStyle: railStyle,
+  expandedStyle: expandedStyle,
+  LANE_EXPANDED_WIDTH: LANE_EXPANDED_WIDTH,
+  LANE_COLLAPSED_WIDTH: LANE_COLLAPSED_WIDTH,
 })
