@@ -51,7 +51,7 @@ function selectFirstValid(sources) {
 
 function normalizeStatus(status) {
   var s = String(status || '').toLowerCase()
-  if (s === 'in-progress' || s === 'inprogress') return 'in-progress'
+  if (s === 'in-progress' || s === 'inprogress' || s === 'in_progress') return 'in-progress'
   if (s === 'draft') return 'draft'
   if (s === 'todo') return 'todo'
   if (s === 'done') return 'done'
@@ -222,9 +222,16 @@ function createApi(ctx) {
 
 function isSafeUrl(url) {
   if (!url) return false
-  var lower = String(url).toLowerCase()
-  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('file:')) return false
-  return true
+  // Strip leading whitespace and control characters (U+0000-U+001F, U+007F-U+009F)
+  var s = String(url).replace(/^[\s\x00-\x1f\x7f-\x9f]+/, '')
+  if (!s) return false
+  // Allow relative paths and fragment-only links
+  if (s.startsWith('/') || s.startsWith('#') || s.startsWith('?')) return true
+  // Explicit scheme allowlist: http, https, mailto (case-insensitive)
+  var lower = s.toLowerCase()
+  if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) return true
+  // Everything else is rejected (javascript:, data:, file:, vbscript:, etc.)
+  return false
 }
 
 function renderInline(text) {
@@ -254,7 +261,6 @@ function renderInline(text) {
 function MarkdownElement(el) {
   if (typeof el === 'string') return el
   if (typeof el === 'number') return el
-  if (el && (el.type || el._t)) return el
   if (!el || !el.type) return null
   switch (el.type) {
     case 'heading':
@@ -603,16 +609,19 @@ function SpecsView({ api, sourceId }) {
   })
 
   var [selectedFile, setSelectedFile] = React.useState(null)
+  var [selectedSourceId, setSelectedSourceId] = React.useState(null)
 
   // Reset selected file when source changes to avoid stale old-source requests
   React.useEffect(function() {
     setSelectedFile(null)
+    setSelectedSourceId(null)
   }, [sourceId])
 
+  // Gate spec query on source match — never query old source with stale path
   var specQuery = useQuery({
     queryKey: ['openspec', 'spec', sourceId, selectedFile],
     queryFn: function() { return api.spec(sourceId, selectedFile) },
-    enabled: !!selectedFile && !worktree,
+    enabled: !!selectedFile && selectedSourceId === sourceId && !worktree,
   })
 
   var files = (query.data && query.data.files) || []
@@ -642,7 +651,7 @@ function SpecsView({ api, sourceId }) {
               'px-3 py-2 cursor-pointer text-sm rounded-md',
               isSelected ? 'bg-(--ui-selected-background, #2a2a2a) text-foreground' : 'text-muted-foreground hover:bg-(--ui-hover-background, #1a1a1a)'
             ),
-            onClick: function() { setSelectedFile(path) },
+            onClick: function() { setSelectedFile(path); setSelectedSourceId(sourceId) },
             children: [
               jsx('div', { style: { fontFamily: 'monospace', fontSize: '12px' }, children: path }),
               file.status ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', marginTop: '2px' }, children: file.status }) : null,
@@ -825,4 +834,6 @@ export const __test = Object.freeze({
   classifyDiffLine: classifyDiffLine,
   hasDiffMode: hasDiffMode,
   isSafeUrl: isSafeUrl,
+  renderInline: renderInline,
+  MarkdownElement: MarkdownElement,
 })

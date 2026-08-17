@@ -219,6 +219,13 @@ if (r.__testAvailable) {
   check(bd.groupCounts && bd.groupCounts.done === 1, 'Group "done" has 1 item',
     JSON.stringify(bd.groupCounts && bd.groupCounts.done))
 
+  // in_progress (underscore) grouping — backend emits this spelling
+  console.log('  in_progress grouping')
+  check(bd.inProgressGroupCount === 3, 'All in_progress/in-progress/inprogress variants group to "in-progress"',
+    'Got ' + bd.inProgressGroupCount)
+  check(bd.inProgressNormalized === 'in-progress', 'normalizeStatus("in_progress") = "in-progress"',
+    JSON.stringify(bd.inProgressNormalized))
+
   // Sort
   console.log('  Sort')
   check(Array.isArray(bd.sorted) && bd.sorted.length === 3, 'sortItems returns sorted array',
@@ -299,22 +306,47 @@ if (r.__testAvailable) {
   check(us.httpsAllowed === true, 'isSafeUrl allows https', JSON.stringify(us.httpsAllowed))
   check(us.httpAllowed === true, 'isSafeUrl allows http', JSON.stringify(us.httpAllowed))
   check(us.relativeAllowed === true, 'isSafeUrl allows relative paths', JSON.stringify(us.relativeAllowed))
+  check(us.fragmentAllowed === true, 'isSafeUrl allows fragment links', JSON.stringify(us.fragmentAllowed))
+  check(us.queryAllowed === true, 'isSafeUrl allows query-only links', JSON.stringify(us.queryAllowed))
+  check(us.mailtoAllowed === true, 'isSafeUrl allows mailto', JSON.stringify(us.mailtoAllowed))
   check(us.javascriptBlocked === true, 'isSafeUrl blocks javascript:', JSON.stringify(us.javascriptBlocked))
   check(us.dataBlocked === true, 'isSafeUrl blocks data:', JSON.stringify(us.dataBlocked))
   check(us.fileBlocked === true, 'isSafeUrl blocks file:', JSON.stringify(us.fileBlocked))
+  check(us.vbscriptBlocked === true, 'isSafeUrl blocks vbscript:', JSON.stringify(us.vbscriptBlocked))
   check(us.emptyBlocked === true, 'isSafeUrl blocks empty string', JSON.stringify(us.emptyBlocked))
   check(us.nullBlocked === true, 'isSafeUrl blocks null', JSON.stringify(us.nullBlocked))
+  // Whitespace/control obfuscation
+  check(us.wsJavascriptBlocked === true, 'isSafeUrl blocks whitespace-prefixed javascript:',
+    JSON.stringify(us.wsJavascriptBlocked))
+  check(us.tabJavascriptBlocked === true, 'isSafeUrl blocks tab-prefixed javascript:',
+    JSON.stringify(us.tabJavascriptBlocked))
+  check(us.newlineJavascriptBlocked === true, 'isSafeUrl blocks newline-prefixed javascript:',
+    JSON.stringify(us.newlineJavascriptBlocked))
+  check(us.controlJavascriptBlocked === true, 'isSafeUrl blocks control-char-prefixed javascript:',
+    JSON.stringify(us.controlJavascriptBlocked))
+  check(us.uppercaseJavascriptBlocked === true, 'isSafeUrl blocks JAVASCRIPT: (uppercase)',
+    JSON.stringify(us.uppercaseJavascriptBlocked))
+  check(us.mixedCaseDataBlocked === true, 'isSafeUrl blocks DaTa: (mixed case)',
+    JSON.stringify(us.mixedCaseDataBlocked))
 
   // __test is frozen
   console.log('  __test frozen')
   check(r.testFrozen === true, '__test object is frozen', JSON.stringify(r.testFrozen))
 
-  // renderInline returns JSX (not plain objects) — verified via source structural checks below
-  console.log('  renderInline structure')
+  // renderInline returns JSX (not plain objects) — verified via executable render checks
+  console.log('  renderInline executable checks')
   var ix = r.inlineJsx || {}
   check(ix.isArray === true, 'renderMarkdown returns array for inline test')
   check(ix.hasParagraph === true, 'renderMarkdown produces paragraph with inline text')
-  check(ix.textHasInlineMarkup === true, 'Paragraph text preserves inline markup for renderInline')
+  // EXECUTABLE: MarkdownElement returns JSX descriptors, not parser objects
+  check(ix.blocksRenderToJsx === true, 'MarkdownElement renders all blocks to JSX (not parser objects)',
+    ix.anyBlockFailed ? 'Block failed to render' : undefined)
+  // EXECUTABLE: renderInline returns JSX elements for inline markers
+  check(ix.inline && ix.inline.isArray === true, 'renderInline returns array')
+  check(ix.inline && ix.inline.allJsx === true, 'renderInline returns JSX elements (not plain objects)')
+  // EXECUTABLE: mixed bold/code/link each produce JSX
+  check(ix.mixed && ix.mixed.hasThree === true, 'renderInline produces 3 JSX elements for bold+code+link',
+    ix.mixed ? 'Got ' + ix.mixed.count : 'no data')
 } else {
   fail('Spec-browser helpers', '__test not available')
 }
@@ -399,6 +431,17 @@ check(!source.includes('Tabs.Trigger'), 'No Tabs.Trigger (use TabsTrigger instea
   // Verify the effect depends on sourceId
   const effectMatch = specsSection.match(/useEffect\([\s\S]*?\[[^\]]*sourceId/)
   check(effectMatch, 'Reset effect depends on sourceId')
+}
+
+// 6b. SpecsView: source-matching gate prevents stale queries
+{
+  const specsStart = source.indexOf('function SpecsView')
+  const nextFnSpecs = source.indexOf('\nfunction ', specsStart + 1)
+  const specsSection = source.slice(specsStart, nextFnSpecs > 0 ? nextFnSpecs : source.length)
+  check(specsSection.includes('selectedSourceId'),
+    'SpecsView tracks selectedSourceId for stale-source prevention')
+  check(specsSection.match(/enabled:.*selectedSourceId\s*===\s*sourceId/),
+    'specQuery enabled gates on sourceId match')
 }
 
 // 7. renderInline returns JSX elements, not plain objects

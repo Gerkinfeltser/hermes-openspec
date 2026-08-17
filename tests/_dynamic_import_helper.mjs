@@ -177,6 +177,18 @@ if (__test) {
       results.board.withoutArchived = __test.toggleArchived(false)
     }
 
+    // in_progress (underscore) grouping — backend emits this spelling
+    if (__test.groupByStatus && __test.normalizeStatus) {
+      var inProgressItems = [
+        { name: 'item-a', status: 'in_progress', token: 'A' },
+        { name: 'item-b', status: 'in-progress', token: 'B' },
+        { name: 'item-c', status: 'inprogress', token: 'C' },
+      ]
+      var ipGroups = __test.groupByStatus(inProgressItems, false)
+      results.board.inProgressGroupCount = (ipGroups['in-progress'] || []).length
+      results.board.inProgressNormalized = __test.normalizeStatus('in_progress')
+    }
+
     // Task parser
     results.tasks = {}
     if (__test.parseTasks) {
@@ -225,11 +237,22 @@ if (__test) {
       results.urlSafety.httpsAllowed = __test.isSafeUrl('https://example.com')
       results.urlSafety.httpAllowed = __test.isSafeUrl('http://example.com')
       results.urlSafety.relativeAllowed = __test.isSafeUrl('/path/to/page')
+      results.urlSafety.fragmentAllowed = __test.isSafeUrl('#section')
+      results.urlSafety.queryAllowed = __test.isSafeUrl('?key=val')
+      results.urlSafety.mailtoAllowed = __test.isSafeUrl('mailto:user@example.com')
       results.urlSafety.javascriptBlocked = !__test.isSafeUrl('javascript:alert(1)')
       results.urlSafety.dataBlocked = !__test.isSafeUrl('data:text/html,<script>')
       results.urlSafety.fileBlocked = !__test.isSafeUrl('file:///etc/passwd')
+      results.urlSafety.vbscriptBlocked = !__test.isSafeUrl('vbscript:MsgBox(1)')
       results.urlSafety.emptyBlocked = !__test.isSafeUrl('')
       results.urlSafety.nullBlocked = !__test.isSafeUrl(null)
+      // Whitespace/control obfuscation tests
+      results.urlSafety.wsJavascriptBlocked = !__test.isSafeUrl('  javascript:alert(1)')
+      results.urlSafety.tabJavascriptBlocked = !__test.isSafeUrl('\tjavascript:alert(1)')
+      results.urlSafety.newlineJavascriptBlocked = !__test.isSafeUrl('\njavascript:alert(1)')
+      results.urlSafety.controlJavascriptBlocked = !__test.isSafeUrl('\x00javascript:alert(1)')
+      results.urlSafety.uppercaseJavascriptBlocked = !__test.isSafeUrl('JAVASCRIPT:alert(1)')
+      results.urlSafety.mixedCaseDataBlocked = !__test.isSafeUrl('DaTa:text/html,<script>')
     }
 
     // __test is frozen
@@ -237,17 +260,64 @@ if (__test) {
 
     // renderInline returns JSX (not plain objects)
     results.inlineJsx = {}
-    if (__test.renderMarkdown) {
-      // renderMarkdown returns parsed blocks; inline processing is in MarkdownElement.
-      // Test the paragraph structure is correct.
+    if (__test.renderMarkdown && __test.MarkdownElement && __test.renderInline) {
+      // Parse markdown into blocks
       var inlineResult = __test.renderMarkdown('Text with **bold** and `code` and [link](https://example.com)')
       results.inlineJsx.isArray = Array.isArray(inlineResult)
       results.inlineJsx.hasParagraph = inlineResult.some(function(el) { return el && el.type === 'paragraph' })
-      // Verify renderInline is used inside MarkdownElement (structural check via source)
-      // The actual JSX rendering happens at React render time; here we verify the
-      // parsed structure contains the text that renderInline will process.
-      var para = inlineResult.find(function(el) { return el && el.type === 'paragraph' })
-      results.inlineJsx.textHasInlineMarkup = para && para.text && para.text.includes('**bold**') && para.text.includes('`code`')
+
+      // EXECUTABLE RENDER CHECK: invoke MarkdownElement on each parsed block
+      // and verify it returns JSX descriptors (with _t property from jsx shim), not raw parser objects
+      var allBlocksAreJsx = true
+      var anyBlockFailed = false
+      for (var bi = 0; bi < inlineResult.length; bi++) {
+        var block = inlineResult[bi]
+        if (!block || !block.type) continue
+        var rendered = __test.MarkdownElement(block)
+        // JSX shim returns {component, props, _t: "jsx"} — parser objects have no _t
+        if (!rendered || typeof rendered !== 'object' || !rendered._t) {
+          allBlocksAreJsx = false
+          anyBlockFailed = true
+          break
+        }
+      }
+      results.inlineJsx.blocksRenderToJsx = allBlocksAreJsx
+      results.inlineJsx.anyBlockFailed = anyBlockFailed
+
+      // EXECUTABLE RENDER CHECK: invoke renderInline directly on inline text
+      // and verify each inline element returns JSX, not plain objects
+      var inlineParts = __test.renderInline('Hello **bold** world')
+      results.inlineJsx.inline = {}
+      results.inlineJsx.inline.isArray = Array.isArray(inlineParts)
+      var inlineAllJsx = true
+      if (Array.isArray(inlineParts)) {
+        for (var ii = 0; ii < inlineParts.length; ii++) {
+          var part = inlineParts[ii]
+          // Strings are fine (plain text between markers)
+          if (typeof part === 'string') continue
+          // JSX elements must have _t property
+          if (!part || typeof part !== 'object' || !part._t) {
+            inlineAllJsx = false
+            break
+          }
+        }
+      }
+      results.inlineJsx.inline.allJsx = inlineAllJsx
+
+      // Mixed bold/code/link rendering — verify each inline type produces JSX
+      var mixedParts = __test.renderInline('**bold** and `code` and [click](https://x.com)')
+      results.inlineJsx.mixed = {}
+      if (Array.isArray(mixedParts)) {
+        var jsxParts = mixedParts.filter(function(p) { return p && typeof p === 'object' && p._t })
+        results.inlineJsx.mixed.count = jsxParts.length
+        // Should have 3 JSX elements: strong, code, a
+        results.inlineJsx.mixed.hasThree = jsxParts.length === 3
+        // Verify component types
+        var componentNames = jsxParts.map(function(p) {
+          return p.props && p.props.children ? (typeof p.props.children === 'string' ? p.props.children.substring(0, 10) : '?') : '?'
+        })
+        results.inlineJsx.mixed.componentChildren = componentNames
+      }
     }
 
   } catch (e) {
