@@ -821,8 +821,9 @@ check(source.includes("method: 'POST'"), 'addSource sends POST')
 check(source.includes("method: 'PUT'"), 'updateSource sends PUT')
 check(source.includes("method: 'DELETE'"), 'removeSource sends DELETE')
 
-// Mutation methods use JSON.stringify for body
-check(source.includes('JSON.stringify'), 'Mutation methods use JSON.stringify for request body')
+// Desktop ctx.rest forwards request bodies as objects, not pre-serialized JSON strings
+check(source.includes("body: { path: path, name: name || undefined }"), 'Mutation methods pass object request bodies')
+check(!source.includes("body: JSON.stringify({ path: path, name: name || undefined })"), 'Mutation methods do not pre-serialize request bodies')
 
 // URL encoding in mutation paths
 check(source.includes("'/sources/' + encodeURIComponent(sourceId)"), 'Mutation paths encode sourceId')

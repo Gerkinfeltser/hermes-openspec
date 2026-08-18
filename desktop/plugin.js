@@ -392,10 +392,10 @@ function createApi(ctx) {
     specBrowser: function(sourceId, opts) { return ctx.rest(specBrowserPath(sourceId, opts)) },
     spec: function(sourceId, path) { return ctx.rest(specPath(sourceId, path)) },
     addSource: function(path, name) {
-      return ctx.rest(sourcesPath(), { method: 'POST', body: JSON.stringify({ path: path, name: name || undefined }) })
+      return ctx.rest(sourcesPath(), { method: 'POST', body: { path: path, name: name || undefined } })
     },
     updateSource: function(sourceId, path, name) {
-      return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'PUT', body: JSON.stringify({ path: path, name: name || undefined }) })
+      return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'PUT', body: { path: path, name: name || undefined } })
     },
     removeSource: function(sourceId) {
       return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'DELETE' })
