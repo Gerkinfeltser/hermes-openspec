@@ -673,10 +673,21 @@ if (__test) {
         registerMany() {},
         rest(path, opts) { addRestCalls.push({ path, opts }); return Promise.resolve({}) }
       }
-      // We can't call createApi directly, but we can test the path builders
-      // and verify the static adapter pattern in source code
       results.sourceMutation.addSourcePath = __test.sourcesPath ? __test.sourcesPath() : null
       results.sourceMutation.updatePathEncodes = __test.changePath ? __test.changePath('src-1', 'test') : null
+      if (__test.createApi) {
+        const initCalls = []
+        const initApi = __test.createApi({ rest(path, opts) {
+          initCalls.push({ path, opts })
+          return Promise.resolve({ ok: true })
+        } })
+        await initApi.initSource('source id')
+        results.sourceMutation.initSourcePath = initCalls[0] && initCalls[0].path
+        results.sourceMutation.initSourceMethod = initCalls[0] && initCalls[0].opts && initCalls[0].opts.method
+        results.sourceMutation.initSourceBody = initCalls[0] && initCalls[0].opts && initCalls[0].opts.body
+        results.sourceMutation.needsInit = __test.sourceNeedsInitialization({ source: { id: 'os-1', valid: false, error: 'No openspec/ directory found' } })
+        results.sourceMutation.validNeedsNoInit = __test.sourceNeedsInitialization({ source: { id: 'os-1', valid: true, error: null } })
+      }
     } catch (e) {
       results.sourceMutation.error = e.message
     }

@@ -814,11 +814,13 @@ console.log('\n[Source] Source mutation adapter and helpers')
 // Static source checks: createApi mutation methods exist
 check(source.includes('addSource'), 'createApi has addSource method')
 check(source.includes('updateSource'), 'createApi has updateSource method')
+check(source.includes('initSource'), 'createApi has initSource method')
 check(source.includes('removeSource'), 'createApi has removeSource method')
 
 // Mutation methods use ctx.rest with method and body
 check(source.includes("method: 'POST'"), 'addSource sends POST')
 check(source.includes("method: 'PUT'"), 'updateSource sends PUT')
+check(source.includes("'/sources/' + encodeURIComponent(sourceId) + '/init', { method: 'POST'"), 'initSource sends POST')
 check(source.includes("method: 'DELETE'"), 'removeSource sends DELETE')
 
 // Desktop ctx.rest forwards request bodies as objects, not pre-serialized JSON strings
@@ -826,6 +828,7 @@ check(source.includes("body: { path: path, name: name || undefined }"), 'Mutatio
 check(!source.includes("body: JSON.stringify({ path: path, name: name || undefined })"), 'Mutation methods do not pre-serialize request bodies')
 
 // URL encoding in mutation paths
+check(source.includes("'/sources/' + encodeURIComponent(sourceId) + '/init'"), 'initSource uses encoded source init path')
 check(source.includes("'/sources/' + encodeURIComponent(sourceId)"), 'Mutation paths encode sourceId')
 
 // Pure helpers exist
@@ -864,6 +867,9 @@ check(source.includes("'Edit source'") || source.includes('"Edit source"'), 'Sou
 
 // Source dialog uses required path validation
 check(source.includes('Path is required'), 'SourceDialog validates required path')
+check(source.includes('function sourceNeedsInitialization'), 'Source add detects missing OpenSpec layout')
+check(source.includes('api.initSource(result.source.id)'), 'Source add initializes missing OpenSpec layout')
+check(source.includes("source.error === 'No openspec/ directory found'"), 'Source add limits initialization to missing layout')
 
 // Source dialog uses Dialog/DialogContent from SDK
 {
@@ -901,6 +907,11 @@ check(source.includes('unregisters the source'), 'Remove confirmation explains r
 if (r.sourceMutation) {
   console.log('  Source mutation adapter')
   check(r.sourceMutation.addSourcePath === '/sources', 'addSource path is /sources', JSON.stringify(r.sourceMutation.addSourcePath))
+  check(r.sourceMutation.initSourcePath === '/sources/source%20id/init', 'initSource path encodes source ID', JSON.stringify(r.sourceMutation.initSourcePath))
+  check(r.sourceMutation.initSourceMethod === 'POST', 'initSource uses POST', JSON.stringify(r.sourceMutation.initSourceMethod))
+  check(r.sourceMutation.initSourceBody === undefined, 'initSource has no request body', JSON.stringify(r.sourceMutation.initSourceBody))
+  check(r.sourceMutation.needsInit === true, 'missing OpenSpec layout triggers initialization', JSON.stringify(r.sourceMutation.needsInit))
+  check(r.sourceMutation.validNeedsNoInit === false, 'valid source does not trigger initialization', JSON.stringify(r.sourceMutation.validNeedsNoInit))
   check(!r.sourceMutation.error, 'No error in source mutation tests', r.sourceMutation.error)
 }
 

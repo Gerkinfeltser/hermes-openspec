@@ -380,6 +380,11 @@ function extractApiError(err) {
   return String(err)
 }
 
+function sourceNeedsInitialization(result) {
+  var source = result && result.source
+  return !!(source && source.id && source.valid === false && source.error === 'No openspec/ directory found')
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // API adapter — source registry mutations + read-only, namespace-scoped
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -396,6 +401,9 @@ function createApi(ctx) {
     },
     updateSource: function(sourceId, path, name) {
       return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'PUT', body: { path: path, name: name || undefined } })
+    },
+    initSource: function(sourceId) {
+      return ctx.rest('/sources/' + encodeURIComponent(sourceId) + '/init', { method: 'POST' })
     },
     removeSource: function(sourceId) {
       return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'DELETE' })
@@ -530,6 +538,12 @@ function SourceDialog({ mode, api, source, onClose, onSaved }) {
     var promise = mode === 'edit' && source
       ? api.updateSource(source.id, trimmed, trimPath(name))
       : api.addSource(trimmed, trimPath(name))
+    if (mode === 'add') {
+      promise = promise.then(function(result) {
+        if (!sourceNeedsInitialization(result)) return result
+        return api.initSource(result.source.id)
+      })
+    }
     promise.then(function(result) {
       setBusy(false)
       onSaved(result)
@@ -1259,4 +1273,6 @@ export const __test = Object.freeze({
   stripFrontmatter: stripFrontmatter,
   trimPath: trimPath,
   extractApiError: extractApiError,
+  sourceNeedsInitialization: sourceNeedsInitialization,
+  createApi: createApi,
 })
