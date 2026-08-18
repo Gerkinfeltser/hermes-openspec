@@ -1074,6 +1074,8 @@ function OpenSpecPage({ api }) {
   var [removeConfirm, setRemoveConfirm] = React.useState(null) // source object or null
   var [removeBusy, setRemoveBusy] = React.useState(false)
   var [removeError, setRemoveError] = React.useState('')
+  var [initBusy, setInitBusy] = React.useState(false)
+  var [initError, setInitError] = React.useState('')
 
   // Auto-select first valid source
   var sources = (sourcesQuery.data && sourcesQuery.data.sources) || []
@@ -1101,6 +1103,17 @@ function OpenSpecPage({ api }) {
 
   function handleAddSource() { setSourceDialog({ mode: 'add' }) }
   function handleEditSource() { if (selectedSource) setSourceDialog({ mode: 'edit' }) }
+  function handleInitSource() {
+    if (!selectedSource || initBusy) return
+    setInitBusy(true); setInitError('')
+    api.initSource(selectedSource.id).then(function() {
+      setInitBusy(false)
+      sourcesQuery.refetch()
+    }).catch(function(e) {
+      setInitBusy(false)
+      setInitError(extractApiError(e))
+    })
+  }
   function handleRemoveSource() {
     if (!selectedSource) return
     setRemoveConfirm(selectedSource)
@@ -1173,9 +1186,13 @@ function OpenSpecPage({ api }) {
 
     // Invalid source warning
     selectedSource && selectedSource.valid === false ? jsx('div', { style: { padding: '12px 16px', background: 'var(--warning-background, #fff3cd)', borderRadius: '4px', margin: '8px 16px', fontSize: '13px' }, children: jsxs('div', { children: [
-      jsx('strong', { children: 'Invalid source' }),
-      selectedSource.error ? ': ' + selectedSource.error : '',
-      selectedSource.path ? jsxs('div', { style: { fontFamily: 'monospace', fontSize: '11px', marginTop: '4px', opacity: 0.7 }, children: ['Path: ', selectedSource.path] }) : null,
+      jsxs('div', { children: [
+        jsx('strong', { children: 'Invalid source' }),
+        selectedSource.error ? ': ' + selectedSource.error : '',
+        selectedSource.path ? jsxs('div', { style: { fontFamily: 'monospace', fontSize: '11px', marginTop: '4px', opacity: 0.7 }, children: ['Path: ', selectedSource.path] }) : null,
+      ] }),
+      selectedSource.error === 'No openspec/ directory found' ? jsx(Button, { size: 'sm', onClick: handleInitSource, disabled: initBusy, style: { marginTop: '10px' }, children: initBusy ? 'Initializing...' : 'Initialize OpenSpec' }) : null,
+      initError ? jsx('div', { style: { marginTop: '8px', color: 'var(--destructive, #f44336)', fontSize: '12px' }, children: initError }) : null,
     ] }) }) : null,
 
     // View body

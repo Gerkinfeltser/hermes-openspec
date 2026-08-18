@@ -865,7 +865,10 @@ check(source.includes('function SourceDialog'), 'SourceDialog component defined'
 check(source.includes("'Add source'") || source.includes('"Add source"'), 'SourceDialog or button has Add source text')
 check(source.includes("'Edit source'") || source.includes('"Edit source"'), 'SourceDialog or button has Edit source text')
 
-// Source dialog uses required path validation
+check(source.includes('handleInitSource'), 'Invalid source has initialize handler')
+check(source.includes('Initialize OpenSpec'), 'Invalid source has initialize action')
+check(source.includes('initBusy'), 'OpenSpecPage tracks initialization state')
+check(source.includes('initError'), 'OpenSpecPage tracks initialization errors')
 check(source.includes('Path is required'), 'SourceDialog validates required path')
 check(source.includes('function sourceNeedsInitialization'), 'Source add detects missing OpenSpec layout')
 check(source.includes('api.initSource(result.source.id)'), 'Source add initializes missing OpenSpec layout')
