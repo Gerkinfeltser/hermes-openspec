@@ -374,6 +374,10 @@ function trimPath(raw) {
 
 function extractApiError(err) {
   if (!err) return 'Unknown error'
+  var candidate = typeof err === 'string' ? err : (err.message || err.detail)
+  if (typeof candidate === 'string' && /\b409\b/.test(candidate) && candidate.indexOf('Source already registered') !== -1) {
+    return 'Source already registered. Select it from the source list, or remove it before adding again.'
+  }
   if (typeof err === 'string') return err
   if (err.message) return err.message
   if (err.detail) return err.detail

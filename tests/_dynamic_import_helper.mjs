@@ -635,6 +635,7 @@ if (__test) {
       results.extractApiError.stringInput = __test.extractApiError('bad request')
       results.extractApiError.messageObj = __test.extractApiError({ message: 'not found' })
       results.extractApiError.detailObj = __test.extractApiError({ detail: 'conflict' })
+      results.extractApiError.duplicateSource = __test.extractApiError({ message: "Error invoking remote method 'hermes:api': Error: 409: {\"detail\":\"Source already registered\"}" })
       results.extractApiError.fallback = __test.extractApiError({ code: 500 })
     }
 

@@ -855,6 +855,7 @@ if (r.__testAvailable && r.extractApiError) {
   check(r.extractApiError.stringInput === 'bad request', 'extractApiError passes strings', JSON.stringify(r.extractApiError.stringInput))
   check(r.extractApiError.messageObj === 'not found', 'extractApiError extracts .message', JSON.stringify(r.extractApiError.messageObj))
   check(r.extractApiError.detailObj === 'conflict', 'extractApiError extracts .detail', JSON.stringify(r.extractApiError.detailObj))
+  check(r.extractApiError.duplicateSource === 'Source already registered. Select it from the source list, or remove it before adding again.', 'extractApiError explains duplicate source', JSON.stringify(r.extractApiError.duplicateSource))
   check(r.extractApiError.fallback === '[object Object]', 'extractApiError falls back to String()', JSON.stringify(r.extractApiError.fallback))
 } else {
   fail('extractApiError helper', '__test not available')
