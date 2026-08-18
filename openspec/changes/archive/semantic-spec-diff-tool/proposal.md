@@ -1,3 +1,7 @@
+---
+title: "Semantic spec diff tool"
+---
+
 ## Why
 
 The frontend `parseSpec` function in `dashboard/dist/index.js` parses OpenSpec spec markdown into structured data (title, purpose, requirements with scenarios). This logic exists only in JavaScript — the Python backend and agent tools can't use it. Meanwhile, the dashboard's spec diff is line-level unified diff (`difflib.unified_diff`), which shows what text changed but not what requirements or scenarios changed. Agents have no way to get a structured delta at all — they must read two full specs and mentally diff them.

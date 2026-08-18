@@ -1,3 +1,7 @@
+---
+title: "Spec first-class tools"
+---
+
 ## Why
 
 Specs are the only core OpenSpec artifact without first-class agent tools. Changes have create→promote→archive. Ideas have create→enrich→promote. Specs require hand-writing markdown after calling `openspec_instructions(artifact=specs)` for the authoring guide — no structured create, no filesystem-backed read, no dedicated list. This blocks agents from programmatically creating and inspecting specs without the CLI binary.

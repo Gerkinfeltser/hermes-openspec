@@ -1,3 +1,7 @@
+---
+title: "Fix init instructions workflow"
+---
+
 ## Why
 
 Fresh OpenSpec repositories exposed three maintainer-visible workflow problems:

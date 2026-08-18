@@ -1,3 +1,7 @@
+---
+title: "Change specs semantic diff view"
+---
+
 ## Why
 
 The change > Specs tab currently shows side-by-side full specs plus a unified line diff — three views of the same data with no summary of what actually changed at the requirement level. For a change that touches one scenario in a 10-requirement spec, the maintainer has to scan two full documents to find the difference. The semantic delta computed by the shared parser (from the `semantic-spec-diff-tool` change) should drive this view instead.

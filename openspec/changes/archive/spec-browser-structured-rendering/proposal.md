@@ -1,3 +1,7 @@
+---
+title: "Spec browser structured rendering"
+---
+
 ## Why
 
 The spec browser uses raw `Markdown` rendering in dirty and refs diff modes — two unstructured markdown blobs side-by-side. This is inconsistent with the change > Specs tab, which uses `SpecContentView` (structured requirement/scenario rendering). The spec list in dirty/refs mode also shows only a `changed` badge with no indication of what changed at the requirement level, so maintainers must click into each spec to see the delta.

@@ -1,3 +1,7 @@
+---
+title: "Add idea lifecycle tools"
+---
+
 ## Why
 
 Agents and humans can currently read OpenSpec artifacts, but they need a uniform write-side lifecycle surface to capture ideas, enrich them, create/promote changes, move task work toward done, and archive/unarchive completed work without manually editing files. A noun-action tool naming convention makes this surface easier for agents and humans to discover and use consistently.
