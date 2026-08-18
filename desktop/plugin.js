@@ -798,11 +798,12 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
   var [prevLanePhase, setPrevLanePhase] = React.useState(null)
 
   var filtered = filterItems(allItems, filter)
+  var visibleStatuses = showArchived ? STATUS_ORDER : STATUS_ORDER.filter(function(s) { return s !== 'archived' })
   var grouped = groupByStatus(filtered, showArchived)
-  var autoCollapsed = autoCollapseEmptyLanes(grouped, STATUS_ORDER)
+  var autoCollapsed = autoCollapseEmptyLanes(grouped, visibleStatuses)
 
   // Lane phase tracking — prune overrides when empty/full flips
-  var lanePhase = computeLanePhase(grouped, STATUS_ORDER)
+  var lanePhase = computeLanePhase(grouped, visibleStatuses)
   React.useEffect(function() {
     if (lanePhase === null || lanePhase === prevLanePhase) return
     var prev = prevLanePhase
@@ -813,7 +814,7 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
     })
   }, [lanePhase, prevLanePhase])
 
-  var collapsedSet = computeCollapsedSet(autoCollapsed, manualOverrides, STATUS_ORDER)
+  var collapsedSet = computeCollapsedSet(autoCollapsed, manualOverrides, visibleStatuses)
 
   function toggleCollapse(status) {
     setManualOverrides(function(prev) {
@@ -821,11 +822,10 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
     })
   }
 
-  var visibleStatuses = showArchived ? STATUS_ORDER : STATUS_ORDER.filter(function(s) { return s !== 'archived' })
-
-  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden', minWidth: 0, minHeight: 0 }, children: [
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '0 4px', flexShrink: 0 }, children: [
-      jsx(Input, { placeholder: 'Filter by title, token, or name...', value: filter, onChange: function(e) { setFilter(e.target.value) }, style: { flex: 1 } }),
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', minWidth: 0, minHeight: 0 }, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '0 4px', flexShrink: 0 }, children: [
+      jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #888)', whiteSpace: 'nowrap' }, children: 'Filter' }),
+      jsx(Input, { placeholder: 'title, token, or name...', value: filter, onChange: function(e) { setFilter(e.target.value) }, style: { flex: 1 } }),
       jsxs('label', { style: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--muted-foreground, #888)', cursor: 'pointer', whiteSpace: 'nowrap' }, children: [
         jsx('input', { type: 'checkbox', checked: showArchived, onChange: function(e) { setShowArchived(e.target.checked) } }),
         'Archived',
@@ -984,25 +984,26 @@ function OpenSpecPage({ api }) {
 
   return jsxs('div', { className: cn('flex flex-col h-full'), children: [
     // Header
-    jsxs('div', { style: { padding: '12px 16px', borderBottom: '1px solid var(--ui-border, #333)', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }, children: [
-      jsx('h1', { style: { fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--foreground, #e0e0e0)' }, children: 'OpenSpec' }),
+    jsxs('div', { style: { padding: '6px 16px', borderBottom: '1px solid var(--ui-border, #333)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }, children: [
+      jsx('h1', { style: { fontSize: '13px', fontWeight: 600, margin: 0, color: 'var(--foreground, #e0e0e0)' }, children: 'OpenSpec' }),
+      jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: 'Source' }),
       jsx(Select, {
         value: selectedSourceId || undefined,
         onValueChange: function(v) { setSelectedSourceId(v) },
         children: [
-          jsx(SelectTrigger, { children: jsx(SelectValue, { placeholder: 'Select source' }) }),
+          jsx(SelectTrigger, { style: { minWidth: '120px' }, children: jsx(SelectValue, { placeholder: 'Select source' }) }),
           jsx(SelectContent, { children: sources.map(function(s) {
             return jsx(SelectItem, { value: s.id, children: (s.name || s.id) + (s.valid === false ? ' (invalid)' : '') }, s.id)
           }) })
         ]
       }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: function() { sourcesQuery.refetch() }, children: 'Refresh' }),
-      selectedSource && selectedSource.openspec && selectedSource.openspec.counts ? jsxs('div', { style: { display: 'flex', gap: '6px', fontSize: '12px', color: 'var(--muted-foreground, #888)' }, children: [
+      selectedSource && selectedSource.openspec && selectedSource.openspec.counts ? jsxs('div', { style: { display: 'flex', gap: '4px', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: [
         selectedSource.openspec.counts.changes != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.changes + ' changes' }) : null,
         selectedSource.openspec.counts.ideas != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.ideas + ' ideas' }) : null,
         selectedSource.openspec.counts.specs != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.specs + ' specs' }) : null,
       ] }) : null,
-      selectedSource && selectedSource.path ? jsx('span', { style: { fontSize: '11px', color: 'var(--muted-foreground, #666)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px', fontFamily: 'monospace' }, title: selectedSource.path, children: selectedSource.path }) : null,
+      selectedSource && selectedSource.path ? jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #666)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px', fontFamily: 'monospace' }, title: selectedSource.path, children: selectedSource.path }) : null,
     ] }),
 
     // View switch
