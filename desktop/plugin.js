@@ -657,11 +657,21 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
 
   var data = query.data || {}
   var title = idea.title || idea.name || 'Idea Detail'
+  var token = idea.token || idea.name || ''
+
+  // Strip YAML frontmatter from content before rendering
+  var content = data.content || ''
+  var stripped = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
     jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
-      jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 12px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
-      jsx(MarkdownView, { content: data.content }),
+      jsxs('div', { style: { marginBottom: '12px' }, children: [
+        jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
+        jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
+          jsx(CopyButton, { text: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
+        ] }),
+      ] }),
+      jsx(MarkdownView, { content: stripped }),
     ] }),
   ] })
 }
