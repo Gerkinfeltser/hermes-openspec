@@ -185,9 +185,20 @@ def _status(has_tasks: bool, stats: Optional[dict[str, int]], *, archived: bool)
 
 def _title_from_markdown(path: Path, fallback: str) -> str:
     try:
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        in_frontmatter = False
+        for line in text.splitlines():
             stripped = line.strip()
-            if stripped.startswith("# "):
+            # Check YAML frontmatter for title field
+            if stripped == "---":
+                in_frontmatter = not in_frontmatter
+                continue
+            if in_frontmatter and stripped.startswith("title:"):
+                val = stripped[6:].strip().strip('"').strip("'")
+                if val:
+                    return val
+            # Stop looking after frontmatter ends
+            if not in_frontmatter and stripped.startswith("# "):
                 return stripped[2:].strip() or fallback
     except OSError:
         pass

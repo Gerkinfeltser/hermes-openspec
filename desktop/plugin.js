@@ -436,7 +436,7 @@ function MarkdownElement(el) {
 function MarkdownView({ content }) {
   var elements = renderMarkdown(content)
   if (!elements || elements.length === 0) return jsx(EmptyState, { title: 'No content', description: 'This document is empty.' })
-  return jsxs('div', { style: { padding: '12px' }, children: elements.map(function(el, i) { return jsx(MarkdownElement, { key: i }, i) }) })
+  return jsxs('div', { style: { padding: '12px' }, children: elements.map(function(el, i) { return jsx(MarkdownElement, Object.assign({}, el, { key: i })) }) })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -611,7 +611,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
       ] }),
       tabs.length > 0 ? jsxs(Tabs, { value: currentTab, onValueChange: setActiveTab, children: [
         jsx(TabsList, { children: tabs.map(function(t) { return jsx(TabsTrigger, { value: t.key, children: t.label }, t.key) }) }),
-        tabs.map(function(t) { return currentTab === t.key ? jsx('div', { key: t.key }, t.content) : null }),
+        tabs.map(function(t) { return currentTab === t.key ? jsx('div', { key: t.key, children: t.content }) : null }),
       ] }) : jsx(EmptyState, { title: 'No artifacts', description: 'This change has no proposal, tasks, design, or spec content.' }),
     ] }),
   ] })
