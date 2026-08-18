@@ -102,6 +102,11 @@ function filterItems(items, query) {
 
 function toggleArchived(current) { return !current }
 
+function stripFrontmatter(content) {
+  if (!content) return content
+  return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lane override helpers — pure, testable, canonical-aligned
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -264,7 +269,13 @@ function parseTasks(content) {
       total++
       if (isDone) done++
       var task = { text: taskMatch[2], done: isDone }
-      if (currentSection) { currentSection.total++; if (isDone) currentSection.done++; currentSection.tasks.push(task) }
+      if (!currentSection) {
+        currentSection = { title: 'Tasks', done: 0, total: 0, tasks: [] }
+        sections.push(currentSection)
+      }
+      currentSection.total++
+      if (isDone) currentSection.done++
+      currentSection.tasks.push(task)
     }
   }
   return { total: total, done: done, sections: sections }
@@ -379,6 +390,8 @@ function isSafeUrl(url) {
   // Strip leading whitespace and control characters (U+0000-U+001F, U+007F-U+009F)
   var s = String(url).replace(/^[\s\x00-\x1f\x7f-\x9f]+/, '')
   if (!s) return false
+  // Reject protocol-relative URLs
+  if (s.startsWith('//')) return false
   // Allow relative paths and fragment-only links
   if (s.startsWith('/') || s.startsWith('#') || s.startsWith('?')) return true
   // Explicit scheme allowlist: http, https, mailto (case-insensitive)
@@ -590,9 +603,9 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
 
   var data = query.data || {}
   var tabs = []
-  if (data.proposal) tabs.push({ key: 'proposal', label: 'Proposal', content: jsx(MarkdownView, { content: data.proposal }) })
-  if (data.tasks) tabs.push({ key: 'tasks', label: 'Tasks', content: jsx(TaskView, { content: data.tasks }) })
-  if (data.design) tabs.push({ key: 'design', label: 'Design', content: jsx(MarkdownView, { content: data.design }) })
+  if (data.proposal) tabs.push({ key: 'proposal', label: 'Proposal', content: jsx(MarkdownView, { content: stripFrontmatter(data.proposal) }) })
+  if (data.tasks) tabs.push({ key: 'tasks', label: 'Tasks', content: jsx(TaskView, { content: stripFrontmatter(data.tasks) }) })
+  if (data.design) tabs.push({ key: 'design', label: 'Design', content: jsx(MarkdownView, { content: stripFrontmatter(data.design) }) })
   if (data.specs && data.specs.length > 0) tabs.push({ key: 'specs', label: 'Specs', content: jsx(SpecsDetailView, { specs: data.specs }) })
 
   var currentTab = activeTab || (tabs.length > 0 ? tabs[0].key : null)
@@ -661,7 +674,7 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
 
   // Strip YAML frontmatter from content before rendering
   var content = data.content || ''
-  var stripped = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
+  var stripped = stripFrontmatter(content)
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
     jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
@@ -805,7 +818,7 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
   var [filter, setFilter] = React.useState('')
   var [showArchived, setShowArchived] = React.useState(true)
   var [manualOverrides, setManualOverrides] = React.useState({})
-  var [prevLanePhase, setPrevLanePhase] = React.useState(null)
+  var prevLanePhase = React.useRef(null)
 
   var filtered = filterItems(allItems, filter)
   var visibleStatuses = showArchived ? STATUS_ORDER : STATUS_ORDER.filter(function(s) { return s !== 'archived' })
@@ -815,14 +828,14 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
   // Lane phase tracking — prune overrides when empty/full flips
   var lanePhase = computeLanePhase(grouped, visibleStatuses)
   React.useEffect(function() {
-    if (lanePhase === null || lanePhase === prevLanePhase) return
-    var prev = prevLanePhase
-    setPrevLanePhase(lanePhase)
+    if (lanePhase === null || lanePhase === prevLanePhase.current) return
+    var prev = prevLanePhase.current
+    prevLanePhase.current = lanePhase
     if (prev === null) return
     setManualOverrides(function(prevOverrides) {
       return pruneStaleOverrides(prevOverrides, prev, lanePhase)
     })
-  }, [lanePhase, prevLanePhase])
+  }, [lanePhase])
 
   var collapsedSet = computeCollapsedSet(autoCollapsed, manualOverrides, visibleStatuses)
 
@@ -885,12 +898,12 @@ function SpecsView({ api, sourceId }) {
 
   var files = (query.data && query.data.files) || []
   var branch = query.data && query.data.branch
-  var changedCount = (query.data && query.data.changedCount) || files.length
+  var changedCount = query.data && query.data.changedCount != null ? query.data.changedCount : files.length
 
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }, children: [
     jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '0 4px' }, children: [
-      jsx(Button, { variant: worktree ? 'default' : 'outline', size: 'sm', onClick: function() { setWorktree(false); setSelectedFile(null) }, children: 'Current' }),
-      jsx(Button, { variant: worktree ? 'outline' : 'default', size: 'sm', onClick: function() { setWorktree(true); setSelectedFile(null) }, children: 'Worktree' }),
+      jsx(Button, { variant: worktree ? 'outline' : 'default', size: 'sm', onClick: function() { setWorktree(false); setSelectedFile(null) }, children: 'Current' }),
+      jsx(Button, { variant: worktree ? 'default' : 'outline', size: 'sm', onClick: function() { setWorktree(true); setSelectedFile(null) }, children: 'Worktree' }),
       branch ? jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)' }, children: branch }) : null,
       worktree ? jsx(Badge, { variant: 'outline', children: changedCount + ' changed' }) : null,
     ] }),
@@ -1122,4 +1135,5 @@ export const __test = Object.freeze({
   pruneStaleOverrides: pruneStaleOverrides,
   BoardColumn: BoardColumn,
   BoardCard: BoardCard,
+  stripFrontmatter: stripFrontmatter,
 })
