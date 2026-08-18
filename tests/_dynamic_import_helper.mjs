@@ -59,7 +59,7 @@ let restCalls = []
 const mockCtx = {
   register(c) { contribs.push(c) },
   registerMany(arr) { for (const c of arr) contribs.push(c) },
-  rest(path, opts) { restCalls.push(path); return Promise.resolve({}) }
+  rest(path, opts) { restCalls.push({ path: path, opts: opts || null }); return Promise.resolve({}) }
 }
 
 try {
@@ -615,6 +615,70 @@ if (__test) {
       var o5 = __test.toggleOverride({}, 'todo', autoEmpty)
       var cs3 = __test.computeCollapsedSet(autoEmpty, o5, ['todo', 'in-progress'])
       results.toggleIntegration.partialToggleKept = o5.todo === false && cs3['in-progress'] === false
+    }
+
+    // 6. trimPath
+    results.trimPath = {}
+    if (__test.trimPath) {
+      results.trimPath.basicTrim = __test.trimPath('  /path/to/repo  ')
+      results.trimPath.noTrim = __test.trimPath('/path/to/repo')
+      results.trimPath.emptyString = __test.trimPath('')
+      results.trimPath.whitespaceOnly = __test.trimPath('   ')
+      results.trimPath.nonString = __test.trimPath(null)
+      results.trimPath.number = __test.trimPath(42)
+    }
+
+    // 7. extractApiError
+    results.extractApiError = {}
+    if (__test.extractApiError) {
+      results.extractApiError.nullInput = __test.extractApiError(null)
+      results.extractApiError.stringInput = __test.extractApiError('bad request')
+      results.extractApiError.messageObj = __test.extractApiError({ message: 'not found' })
+      results.extractApiError.detailObj = __test.extractApiError({ detail: 'conflict' })
+      results.extractApiError.fallback = __test.extractApiError({ code: 500 })
+    }
+
+    // 8. Source mutation adapter — create a fresh api via register and test mutation methods
+    results.sourceMutation = {}
+    try {
+      // Create a fresh mock ctx to capture the api object
+      let capturedApi = null
+      const testCtx = {
+        register() {},
+        registerMany(arr) {
+          for (const c of arr) {
+            if (c.render) {
+              // Intercept render to capture the api from its closure
+              const origRender = c.render
+              c.render = function() {
+                // The api is created in register() and passed to OpenSpecPage
+                // We can't directly access it, so we'll test via __test
+                return origRender()
+              }
+            }
+          }
+        },
+        rest(path, opts) {
+          results.sourceMutation.lastRestPath = path
+          results.sourceMutation.lastRestOpts = opts || null
+          return Promise.resolve({ ok: true })
+        }
+      }
+      plugin.register(testCtx)
+
+      // Test addSource path and body via a direct rest mock
+      let addRestCalls = []
+      const addCtx = {
+        register() {},
+        registerMany() {},
+        rest(path, opts) { addRestCalls.push({ path, opts }); return Promise.resolve({}) }
+      }
+      // We can't call createApi directly, but we can test the path builders
+      // and verify the static adapter pattern in source code
+      results.sourceMutation.addSourcePath = __test.sourcesPath ? __test.sourcesPath() : null
+      results.sourceMutation.updatePathEncodes = __test.changePath ? __test.changePath('src-1', 'test') : null
+    } catch (e) {
+      results.sourceMutation.error = e.message
     }
 
   } catch (e) {

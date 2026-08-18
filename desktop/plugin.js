@@ -1,9 +1,10 @@
 /**
- * OpenSpec Desktop runtime plugin — read-only project surface.
+ * OpenSpec Desktop runtime plugin — source registry + project surface.
  *
  * Registers /openspec route + sidebar nav entry. Provides source selector,
  * work board (ideas, changes by status), change/idea detail dialogs,
- * current specs browser, and worktree diff views. All data via ctx.rest.
+ * current specs browser, worktree diff views, and source management
+ * (add/edit/remove) via the existing backend CRUD routes.
  *
  * Packaging: single uncompiled ESM file. Runtime loader scans
  * ~/.hermes/plugins/openspec/desktop/plugin.js.
@@ -367,8 +368,20 @@ function effectiveDiffMode(desired, data) {
   return desired
 }
 
+function trimPath(raw) {
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+function extractApiError(err) {
+  if (!err) return 'Unknown error'
+  if (typeof err === 'string') return err
+  if (err.message) return err.message
+  if (err.detail) return err.detail
+  return String(err)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// API adapter — read-only, namespace-scoped
+// API adapter — source registry mutations + read-only, namespace-scoped
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function createApi(ctx) {
@@ -378,6 +391,15 @@ function createApi(ctx) {
     idea: function(sourceId, name) { return ctx.rest(ideaPath(sourceId, name)) },
     specBrowser: function(sourceId, opts) { return ctx.rest(specBrowserPath(sourceId, opts)) },
     spec: function(sourceId, path) { return ctx.rest(specPath(sourceId, path)) },
+    addSource: function(path, name) {
+      return ctx.rest(sourcesPath(), { method: 'POST', body: JSON.stringify({ path: path, name: name || undefined }) })
+    },
+    updateSource: function(sourceId, path, name) {
+      return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'PUT', body: JSON.stringify({ path: path, name: name || undefined }) })
+    },
+    removeSource: function(sourceId) {
+      return ctx.rest('/sources/' + encodeURIComponent(sourceId), { method: 'DELETE' })
+    },
   }
 }
 
@@ -481,6 +503,60 @@ function QueryState({ query, onRetry, emptyTitle, emptyDescription, children }) 
   })
   if (state === 'empty') return jsx(EmptyState, { title: emptyTitle || 'Nothing found', description: emptyDescription || 'No data available.' })
   return children
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Source dialog — add/edit source registry entries
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function SourceDialog({ mode, api, source, onClose, onSaved }) {
+  var initialPath = source && source.path ? source.path : ''
+  var initialName = source && source.name ? source.name : ''
+  var _p = React.useState(initialPath)
+  var _n = React.useState(initialName)
+  var _busy = React.useState(false)
+  var _err = React.useState('')
+  var path = _p[0], setPath = _p[1]
+  var name = _n[0], setName = _n[1]
+  var busy = _busy[0], setBusy = _busy[1]
+  var err = _err[0], setErr = _err[1]
+
+  var title = mode === 'edit' ? 'Edit source' : 'Add source'
+
+  function handleSave() {
+    var trimmed = trimPath(path)
+    if (!trimmed) { setErr('Path is required'); return }
+    setBusy(true); setErr('')
+    var promise = mode === 'edit' && source
+      ? api.updateSource(source.id, trimmed, trimPath(name))
+      : api.addSource(trimmed, trimPath(name))
+    promise.then(function(result) {
+      setBusy(false)
+      onSaved(result)
+    }).catch(function(e) {
+      setBusy(false)
+      setErr(extractApiError(e))
+    })
+  }
+
+  return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsxs(DialogContent, { style: { padding: '16px', maxWidth: '480px' }, children: [
+    jsx('h2', { style: { fontSize: '16px', fontWeight: 600, margin: '0 0 12px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
+    jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }, children: [
+      jsxs('div', { children: [
+        jsx('label', { style: { fontSize: '12px', fontWeight: 500, color: 'var(--muted-foreground, #888)', marginBottom: '4px', display: 'block' }, children: 'Path *' }),
+        jsx(Input, { value: path, onChange: function(e) { setPath(e.target.value) }, placeholder: '/path/to/repo', disabled: busy }),
+      ] }),
+      jsxs('div', { children: [
+        jsx('label', { style: { fontSize: '12px', fontWeight: 500, color: 'var(--muted-foreground, #888)', marginBottom: '4px', display: 'block' }, children: 'Display name' }),
+        jsx(Input, { value: name, onChange: function(e) { setName(e.target.value) }, placeholder: 'Optional display name', disabled: busy }),
+      ] }),
+    ] }),
+    err ? jsx('div', { style: { padding: '8px 12px', background: 'var(--destructive-background, #3d1a1a)', borderRadius: '4px', fontSize: '12px', color: 'var(--destructive, #f44336)', marginBottom: '12px' }, children: err }) : null,
+    jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px' }, children: [
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, disabled: busy, children: 'Cancel' }),
+      jsx(Button, { size: 'sm', onClick: handleSave, disabled: busy, children: busy ? 'Saving...' : 'Save' }),
+    ] }),
+  ] }) })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -980,6 +1056,10 @@ function OpenSpecPage({ api }) {
   var [selectedSourceId, setSelectedSourceId] = React.useState(null)
   var [view, setView] = React.useState('work')
   var [selectedItem, setSelectedItem] = React.useState(null) // {item, sourceId, type}
+  var [sourceDialog, setSourceDialog] = React.useState(null) // {mode: 'add'|'edit'} or null
+  var [removeConfirm, setRemoveConfirm] = React.useState(null) // source object or null
+  var [removeBusy, setRemoveBusy] = React.useState(false)
+  var [removeError, setRemoveError] = React.useState('')
 
   // Auto-select first valid source
   var sources = (sourcesQuery.data && sourcesQuery.data.sources) || []
@@ -1005,6 +1085,33 @@ function OpenSpecPage({ api }) {
     setSelectedItem({ item: item, sourceId: selectedSourceId, type: item._type || 'change' })
   }
 
+  function handleAddSource() { setSourceDialog({ mode: 'add' }) }
+  function handleEditSource() { if (selectedSource) setSourceDialog({ mode: 'edit' }) }
+  function handleRemoveSource() {
+    if (!selectedSource) return
+    setRemoveConfirm(selectedSource)
+    setRemoveError('')
+  }
+  function confirmRemove() {
+    if (!removeConfirm) return
+    setRemoveBusy(true); setRemoveError('')
+    api.removeSource(removeConfirm.id).then(function() {
+      setRemoveBusy(false); setRemoveConfirm(null)
+      setSelectedSourceId(null)
+      sourcesQuery.refetch()
+    }).catch(function(e) {
+      setRemoveBusy(false)
+      setRemoveError(extractApiError(e))
+    })
+  }
+  function onSourceSaved(result) {
+    setSourceDialog(null)
+    sourcesQuery.refetch()
+    if (result && result.source && result.source.id) {
+      setSelectedSourceId(result.source.id)
+    }
+  }
+
   return jsxs('div', { className: cn('flex flex-col h-full'), children: [
     // Header
     jsxs('div', { style: { padding: '6px 16px', borderBottom: '1px solid var(--ui-border, #333)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }, children: [
@@ -1028,9 +1135,9 @@ function OpenSpecPage({ api }) {
       jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
       jsx(CopyButton, { text: selectedSource.id, children: jsx(Badge, { variant: 'outline', style: { fontSize: '10px', cursor: 'pointer' }, children: selectedSource.id }) }),
       selectedSource.path ? jsx('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }, title: selectedSource.path, children: selectedSource.path }) : null,
-      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Edit source', children: '\u270E' }),
-      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Remove source', children: '\u2715' }),
-      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Add source', children: '+' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Edit source', 'aria-label': 'Edit source', onClick: handleEditSource, children: '\u270E' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Remove source', 'aria-label': 'Remove source', onClick: handleRemoveSource, children: '\u2715' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Add source', 'aria-label': 'Add source', onClick: handleAddSource, children: '+' }),
     ] }) : null,
 
     // View switch
@@ -1067,6 +1174,20 @@ function OpenSpecPage({ api }) {
     // Detail dialog — synchronous gate: reject stale item from different source
     selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'change' && selectedSource && selectedSource.valid !== false ? jsx(ChangeDetailDialog, { api: api, sourceId: selectedSourceId, change: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
     selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'idea' && selectedSource && selectedSource.valid !== false ? jsx(IdeaDetailDialog, { api: api, sourceId: selectedSourceId, idea: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
+
+    // Source add/edit dialog
+    sourceDialog ? jsx(SourceDialog, { mode: sourceDialog.mode, api: api, source: sourceDialog.mode === 'edit' ? selectedSource : null, onClose: function() { setSourceDialog(null) }, onSaved: onSourceSaved }) : null,
+
+    // Remove source confirmation dialog
+    removeConfirm ? jsx(Dialog, { open: true, onOpenChange: function() { if (!removeBusy) { setRemoveConfirm(null); setRemoveError('') } }, children: jsxs(DialogContent, { style: { padding: '16px', maxWidth: '400px' }, children: [
+      jsx('h2', { style: { fontSize: '16px', fontWeight: 600, margin: '0 0 8px', color: 'var(--foreground, #e0e0e0)' }, children: 'Remove source' }),
+      jsx('p', { style: { fontSize: '13px', color: 'var(--muted-foreground, #888)', margin: '0 0 12px' }, children: 'Remove source "' + (removeConfirm.name || removeConfirm.id) + '"? This unregisters the source from OpenSpec but does not delete any files.' }),
+      removeError ? jsx('div', { style: { padding: '8px 12px', background: 'var(--destructive-background, #3d1a1a)', borderRadius: '4px', fontSize: '12px', color: 'var(--destructive, #f44336)', marginBottom: '12px' }, children: removeError }) : null,
+      jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px' }, children: [
+        jsx(Button, { variant: 'outline', size: 'sm', onClick: function() { setRemoveConfirm(null); setRemoveError('') }, disabled: removeBusy, children: 'Cancel' }),
+        jsx(Button, { variant: 'destructive', size: 'sm', onClick: confirmRemove, disabled: removeBusy, children: removeBusy ? 'Removing...' : 'Remove' }),
+      ] }),
+    ] }) }) : null,
   ] })
 }
 
@@ -1077,7 +1198,7 @@ function OpenSpecPage({ api }) {
 var plugin = {
   id: 'openspec',
   name: 'OpenSpec',
-  description: 'OpenSpec read-only project surface — sources, changes, ideas, specs, and diffs.',
+  description: 'OpenSpec source registry + project surface — sources, changes, ideas, specs, and diffs.',
   register: function(ctx) {
     var api = createApi(ctx)
     ctx.registerMany([
@@ -1136,4 +1257,6 @@ export const __test = Object.freeze({
   BoardColumn: BoardColumn,
   BoardCard: BoardCard,
   stripFrontmatter: stripFrontmatter,
+  trimPath: trimPath,
+  extractApiError: extractApiError,
 })

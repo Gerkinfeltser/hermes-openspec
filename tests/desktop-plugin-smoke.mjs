@@ -807,6 +807,103 @@ check(source.includes('overflowY'), 'Cards container has overflowY for vertical 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Source action icons wiring — adapter, dialog, helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Source] Source mutation adapter and helpers')
+
+// Static source checks: createApi mutation methods exist
+check(source.includes('addSource'), 'createApi has addSource method')
+check(source.includes('updateSource'), 'createApi has updateSource method')
+check(source.includes('removeSource'), 'createApi has removeSource method')
+
+// Mutation methods use ctx.rest with method and body
+check(source.includes("method: 'POST'"), 'addSource sends POST')
+check(source.includes("method: 'PUT'"), 'updateSource sends PUT')
+check(source.includes("method: 'DELETE'"), 'removeSource sends DELETE')
+
+// Mutation methods use JSON.stringify for body
+check(source.includes('JSON.stringify'), 'Mutation methods use JSON.stringify for request body')
+
+// URL encoding in mutation paths
+check(source.includes("'/sources/' + encodeURIComponent(sourceId)"), 'Mutation paths encode sourceId')
+
+// Pure helpers exist
+check(source.includes('function trimPath'), 'trimPath function defined')
+check(source.includes('function extractApiError'), 'extractApiError function defined')
+
+// trimPath behavior
+if (r.__testAvailable && r.trimPath) {
+  console.log('  trimPath helper')
+  check(r.trimPath.basicTrim === '/path/to/repo', 'trimPath trims whitespace', JSON.stringify(r.trimPath.basicTrim))
+  check(r.trimPath.noTrim === '/path/to/repo', 'trimPath passes clean strings', JSON.stringify(r.trimPath.noTrim))
+  check(r.trimPath.emptyString === '', 'trimPath returns empty for empty string', JSON.stringify(r.trimPath.emptyString))
+  check(r.trimPath.whitespaceOnly === '', 'trimPath returns empty for whitespace-only', JSON.stringify(r.trimPath.whitespaceOnly))
+  check(r.trimPath.nonString === '', 'trimPath returns empty for null', JSON.stringify(r.trimPath.nonString))
+  check(r.trimPath.number === '', 'trimPath returns empty for number', JSON.stringify(r.trimPath.number))
+} else {
+  fail('trimPath helper', '__test not available')
+}
+
+// extractApiError behavior
+if (r.__testAvailable && r.extractApiError) {
+  console.log('  extractApiError helper')
+  check(r.extractApiError.nullInput === 'Unknown error', 'extractApiError handles null', JSON.stringify(r.extractApiError.nullInput))
+  check(r.extractApiError.stringInput === 'bad request', 'extractApiError passes strings', JSON.stringify(r.extractApiError.stringInput))
+  check(r.extractApiError.messageObj === 'not found', 'extractApiError extracts .message', JSON.stringify(r.extractApiError.messageObj))
+  check(r.extractApiError.detailObj === 'conflict', 'extractApiError extracts .detail', JSON.stringify(r.extractApiError.detailObj))
+  check(r.extractApiError.fallback === '[object Object]', 'extractApiError falls back to String()', JSON.stringify(r.extractApiError.fallback))
+} else {
+  fail('extractApiError helper', '__test not available')
+}
+
+// Source dialog component
+check(source.includes('function SourceDialog'), 'SourceDialog component defined')
+check(source.includes("'Add source'") || source.includes('"Add source"'), 'SourceDialog or button has Add source text')
+check(source.includes("'Edit source'") || source.includes('"Edit source"'), 'SourceDialog or button has Edit source text')
+
+// Source dialog uses required path validation
+check(source.includes('Path is required'), 'SourceDialog validates required path')
+
+// Source dialog uses Dialog/DialogContent from SDK
+{
+  var sdStart = source.indexOf('function SourceDialog')
+  var sdEnd = source.indexOf('\nfunction ', sdStart + 1)
+  var sdSection = source.slice(sdStart, sdEnd > 0 ? sdEnd : source.length)
+  check(sdSection.includes('jsx(Dialog') || sdSection.includes('jsxs(Dialog'), 'SourceDialog renders Dialog')
+  check(sdSection.includes('jsx(DialogContent') || sdSection.includes('jsxs(DialogContent'), 'SourceDialog renders DialogContent')
+  check(sdSection.includes('jsx(Input'), 'SourceDialog renders Input fields')
+  check(sdSection.includes('jsx(Button'), 'SourceDialog renders Button controls')
+  check(sdSection.includes('disabled: busy'), 'SourceDialog disables controls while busy')
+}
+
+// onClick handlers wired on source action buttons
+check(source.includes('onClick: handleEditSource'), 'Edit button has onClick: handleEditSource')
+check(source.includes('onClick: handleRemoveSource'), 'Remove button has onClick: handleRemoveSource')
+check(source.includes('onClick: handleAddSource'), 'Add button has onClick: handleAddSource')
+
+// Accessible labels on source action buttons
+check(source.includes("'aria-label': 'Edit source'"), 'Edit button has aria-label')
+check(source.includes("'aria-label': 'Remove source'"), 'Remove button has aria-label')
+check(source.includes("'aria-label': 'Add source'"), 'Add button has aria-label')
+
+// State management for source dialog and remove confirmation
+check(source.includes('sourceDialog'), 'OpenSpecPage tracks sourceDialog state')
+check(source.includes('removeConfirm'), 'OpenSpecPage tracks removeConfirm state')
+check(source.includes('removeBusy'), 'OpenSpecPage tracks removeBusy state')
+check(source.includes('removeError'), 'OpenSpecPage tracks removeError state')
+
+// Remove confirmation dialog
+check(source.includes('Remove source'), 'Remove confirmation dialog exists')
+check(source.includes('unregisters the source'), 'Remove confirmation explains registry-only removal')
+
+// Source mutation adapter __test results
+if (r.sourceMutation) {
+  console.log('  Source mutation adapter')
+  check(r.sourceMutation.addSourcePath === '/sources', 'addSource path is /sources', JSON.stringify(r.sourceMutation.addSourcePath))
+  check(!r.sourceMutation.error, 'No error in source mutation tests', r.sourceMutation.error)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Summary
 // ═══════════════════════════════════════════════════════════════════════════════
 console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===')
