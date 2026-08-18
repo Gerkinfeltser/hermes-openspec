@@ -40,3 +40,8 @@ The backend helper (_compute_semantic_diff) and the frontend component (SpecDelt
 ### Suggested Next Step
 Draft a change proposal that specifies the exact payload field addition in _spec_browser and the frontend render swap, with a view-mode toggle for semantic/side-by-side/raw.
 <!-- OPENSPEC_IDEA_ENRICHMENT_END -->
+
+## Archive
+- archived: 2026-08-18
+- author: dami etoile <dami.etoile@gmail.com> (committed e5a66d8, 2026-07-02)
+- promoted_to: changes/semantic-diff-in-spec-browser

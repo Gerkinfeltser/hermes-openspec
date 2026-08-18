@@ -40,3 +40,8 @@ Pure frontend change. Add a text input, a state variable, and filter the items a
 ### Suggested Next Step
 Implement directly — add filter input to Board component, filter byCol entries by text match on title/name/token, add archived show/hide toggle.
 <!-- OPENSPEC_IDEA_ENRICHMENT_END -->
+
+## Archive
+- archived: 2026-08-18
+- author: dami etoile <dami.etoile@gmail.com> (committed e5a66d8, 2026-07-02)
+- promoted_to: changes/board-search-and-filter

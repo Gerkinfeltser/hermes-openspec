@@ -63,3 +63,8 @@ T-Shirt Size: M
 ### Suggested Next Step
 Promote to a change proposal. The command set, arg parsing, and tool mapping are fully specified. Implementation is mechanical.
 <!-- OPENSPEC_IDEA_ENRICHMENT_END -->
+
+## Archive
+- archived: 2026-08-18
+- author: dami etoile <dami.etoile@gmail.com> (committed e5a66d8, 2026-07-02)
+- reason: orphaned, no corresponding change created

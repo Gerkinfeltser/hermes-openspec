@@ -41,3 +41,8 @@ Content already exists in docs/. The work is restructuring it into SKILL.md fron
 ### Suggested Next Step
 First verify ctx.register_skill() API and plugin.yaml provides_skills field in the Hermes plugin docs. Then create the skills/ directory with openspec-orchestration and openspec-subagent SKILL.md files, wire in register().
 <!-- OPENSPEC_IDEA_ENRICHMENT_END -->
+
+## Archive
+- archived: 2026-08-18
+- author: dami etoile <dami.etoile@gmail.com> (committed e5a66d8, 2026-07-02)
+- promoted_to: changes/bundled-openspec-orchestration-skills
