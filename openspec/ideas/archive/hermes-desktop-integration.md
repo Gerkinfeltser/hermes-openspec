@@ -45,5 +45,5 @@ Open issue or draft PR before non-trivial implementation, per hermes-openspec CO
 
 ## Archive
 - archived: 2026-08-18
-- author: dami etoile <dami.etoile@gmail.com> (committed e5a66d8, 2026-07-02)
+- author: Gerkinfeltser (Gerkinfeltser) — committed 0f281a3, 2026-08-17
 - promoted_to: changes/hermes-desktop-read-surface
