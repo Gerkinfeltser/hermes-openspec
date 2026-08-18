@@ -468,6 +468,34 @@ check(source.includes("background: 'var(--ui-bg-elevated)'"), 'Card background i
 check(source.includes("borderLeftWidth: '2px'"), 'Card has 2px tone left border')
 check(source.includes("borderLeftColor: statusTone(status)"), 'Card left border uses statusTone')
 
+// --- BoardCard sequence badge guard ---
+console.log('  BoardCard sequence badge guard')
+{
+  // Extract the BoardCard function body to test sequence handling
+  var bcStart = source.indexOf('function BoardCard')
+  var bcEnd = source.indexOf('\nfunction ', bcStart + 1)
+  var bcSection = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
+
+  // Guard should reject non-finite values — no [object Object] substring anywhere
+  check(bcSection.includes('Number.isFinite'), 'Sequence badge uses Number.isFinite guard')
+  check(bcSection.includes("typeof item.sequence === 'number'"), 'Sequence badge checks typeof === number')
+
+  // Verify the guard pattern is correct by testing the expression directly
+  var seqGuard = function(seq) {
+    return typeof seq === 'number' && Number.isFinite(seq) ? '#' + seq : null
+  }
+  check(seqGuard(42) === '#42', 'sequence=42 renders #42')
+  check(seqGuard(0) === '#0', 'sequence=0 renders #0')
+  check(seqGuard(-3) === '#-3', 'sequence=-3 renders #-3')
+  check(seqGuard(NaN) === null, 'sequence=NaN renders null')
+  check(seqGuard(Infinity) === null, 'sequence=Infinity renders null')
+  check(seqGuard({}) === null, 'sequence={} renders null (no [object Object])')
+  check(seqGuard([]) === null, 'sequence=[] renders null')
+  check(seqGuard('5') === null, 'sequence="5" renders null (string)')
+  check(seqGuard(null) === null, 'sequence=null renders null')
+  check(seqGuard(undefined) === null, 'sequence=undefined renders null')
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Static analysis checks — SDK usage patterns
 // ═══════════════════════════════════════════════════════════════════════════════

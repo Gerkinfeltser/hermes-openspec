@@ -513,7 +513,7 @@ function BoardCard({ item, sourceId, sourceToken, onSelect }) {
     children: [
       jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }, children: [
         jsx('div', { style: { fontWeight: 500, fontSize: '13px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
-        item.sequence != null ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', flexShrink: 0 }, children: '#' + item.sequence }) : null
+        typeof item.sequence === 'number' && Number.isFinite(item.sequence) ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', flexShrink: 0 }, children: '#' + item.sequence }) : null
       ] }),
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }, children: [
         jsx(CopyButton, { text: displayToken, stopPropagation: true, children: jsx('span', { style: { fontSize: '11px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: displayToken }) }),
