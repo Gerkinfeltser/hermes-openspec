@@ -187,17 +187,24 @@ def _title_from_markdown(path: Path, fallback: str) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
         in_frontmatter = False
-        for line in text.splitlines():
+        frontmatter_done = False
+        frontmatter_title: str | None = None
+        for i, line in enumerate(text.splitlines()):
             stripped = line.strip()
-            # Check YAML frontmatter for title field
             if stripped == "---":
-                in_frontmatter = not in_frontmatter
-                continue
+                if not frontmatter_done and not in_frontmatter and i == 0:
+                    in_frontmatter = True
+                    continue
+                if in_frontmatter:
+                    in_frontmatter = False
+                    frontmatter_done = True
+                    if frontmatter_title:
+                        return frontmatter_title
+                    continue
             if in_frontmatter and stripped.startswith("title:"):
                 val = stripped[6:].strip().strip('"').strip("'")
                 if val:
-                    return val
-            # Stop looking after frontmatter ends
+                    frontmatter_title = val
             if not in_frontmatter and stripped.startswith("# "):
                 return stripped[2:].strip() or fallback
     except OSError:
