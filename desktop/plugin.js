@@ -1008,11 +1008,6 @@ function OpenSpecPage({ api }) {
         ]
       }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: function() { sourcesQuery.refetch() }, children: 'Refresh' }),
-      selectedSource && selectedSource.openspec && selectedSource.openspec.counts ? jsxs('div', { style: { display: 'flex', gap: '4px', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: [
-        selectedSource.openspec.counts.changes != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.changes + ' changes' }) : null,
-        selectedSource.openspec.counts.ideas != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.ideas + ' ideas' }) : null,
-        selectedSource.openspec.counts.specs != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.specs + ' specs' }) : null,
-      ] }) : null,
     ] }),
 
     // Source info line
@@ -1020,17 +1015,27 @@ function OpenSpecPage({ api }) {
       jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
       jsx(CopyButton, { text: selectedSource.id, children: jsx(Badge, { variant: 'outline', style: { fontSize: '10px', cursor: 'pointer' }, children: selectedSource.id }) }),
       selectedSource.path ? jsx('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }, title: selectedSource.path, children: selectedSource.path }) : null,
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Edit source', children: '\u270E' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Remove source', children: '\u2715' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Add source', children: '+' }),
     ] }) : null,
 
     // View switch
-    jsx('div', { style: { padding: '8px 16px', borderBottom: '1px solid var(--ui-border, #333)' }, children: jsx(SegmentedControl, {
-      value: view,
-      onChange: setView,
-      options: [
-        { id: 'work', label: 'Work' },
-        { id: 'specs', label: 'Specs' },
-      ]
-    }) }),
+    jsxs('div', { style: { padding: '8px 16px', borderBottom: '1px solid var(--ui-border, #333)', display: 'flex', alignItems: 'center', gap: '12px' }, children: [
+      jsx(SegmentedControl, {
+        value: view,
+        onChange: setView,
+        options: [
+          { id: 'work', label: 'Work' },
+          { id: 'specs', label: 'Specs' },
+        ]
+      }),
+      selectedSource && selectedSource.openspec && selectedSource.openspec.counts ? jsxs('div', { style: { display: 'flex', gap: '4px', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: [
+        selectedSource.openspec.counts.changes != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.changes + ' changes' }) : null,
+        selectedSource.openspec.counts.ideas != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.ideas + ' ideas' }) : null,
+        selectedSource.openspec.counts.specs != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.specs + ' specs' }) : null,
+      ] }) : null,
+    ] }),
 
     // Invalid source warning
     selectedSource && selectedSource.valid === false ? jsx('div', { style: { padding: '12px 16px', background: 'var(--warning-background, #fff3cd)', borderRadius: '4px', margin: '8px 16px', fontSize: '13px' }, children: jsxs('div', { children: [
