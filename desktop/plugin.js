@@ -1013,8 +1013,14 @@ function OpenSpecPage({ api }) {
         selectedSource.openspec.counts.ideas != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.ideas + ' ideas' }) : null,
         selectedSource.openspec.counts.specs != null ? jsx(Badge, { variant: 'outline', children: selectedSource.openspec.counts.specs + ' specs' }) : null,
       ] }) : null,
-      selectedSource && selectedSource.path ? jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #666)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px', fontFamily: 'monospace' }, title: selectedSource.path, children: selectedSource.path }) : null,
     ] }),
+
+    // Source info line
+    selectedSource ? jsxs('div', { style: { padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--muted-foreground, #888)', borderBottom: '1px solid var(--ui-border, #333)' }, children: [
+      jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
+      jsx(CopyButton, { text: selectedSource.id, children: jsx(Badge, { variant: 'outline', style: { fontSize: '10px', cursor: 'pointer' }, children: selectedSource.id }) }),
+      selectedSource.path ? jsx('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }, title: selectedSource.path, children: selectedSource.path }) : null,
+    ] }) : null,
 
     // View switch
     jsx('div', { style: { padding: '8px 16px', borderBottom: '1px solid var(--ui-border, #333)' }, children: jsx(SegmentedControl, {
