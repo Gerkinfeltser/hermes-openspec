@@ -205,6 +205,8 @@ if (r.__testAvailable) {
     String(bd.normalizeDraft))
   check(bd.normalizeArchived === 'archived', 'normalizeStatus("archived") = "archived"',
     String(bd.normalizeArchived))
+  check(bd.normalizeIdeas === 'ideas', 'normalizeStatus("ideas") = "ideas"',
+    String(bd.normalizeIdeas))
   check(bd.normalizeUnknown != null, 'normalizeStatus handles unknown status',
     String(bd.normalizeUnknown))
 
@@ -214,6 +216,8 @@ if (r.__testAvailable) {
     'Got ' + (bd.groupKeys && bd.groupKeys.length) + ' groups: ' + (bd.groupKeys && bd.groupKeys.join(', ')))
   check(bd.groupCounts && bd.groupCounts['in-progress'] === 1, 'Group "in-progress" has 1 item',
     JSON.stringify(bd.groupCounts && bd.groupCounts['in-progress']))
+  check(bd.groupCounts && bd.groupCounts.ideas === 1, 'Group "ideas" has 1 item',
+    String(bd.groupCounts && bd.groupCounts.ideas))
   check(bd.groupCounts && bd.groupCounts.draft === 1, 'Group "draft" has 1 item',
     JSON.stringify(bd.groupCounts && bd.groupCounts.draft))
   check(bd.groupCounts && bd.groupCounts.done === 1, 'Group "done" has 1 item',

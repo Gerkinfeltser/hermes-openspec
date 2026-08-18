@@ -52,6 +52,7 @@ function selectFirstValid(sources) {
 function normalizeStatus(status) {
   var s = String(status || '').toLowerCase()
   if (s === 'in-progress' || s === 'inprogress' || s === 'in_progress') return 'in-progress'
+  if (s === 'ideas') return 'ideas'
   if (s === 'draft') return 'draft'
   if (s === 'todo') return 'todo'
   if (s === 'done') return 'done'

@@ -139,6 +139,7 @@ if (__test) {
       results.board.normalizeInProgress = __test.normalizeStatus('in-progress')
       results.board.normalizeDraft = __test.normalizeStatus('draft')
       results.board.normalizeArchived = __test.normalizeStatus('archived')
+      results.board.normalizeIdeas = __test.normalizeStatus('ideas')
       results.board.normalizeUnknown = __test.normalizeStatus('something-new')
     }
     if (__test.groupByStatus) {
@@ -147,6 +148,7 @@ if (__test) {
         { name: 'b', status: 'in-progress', token: 'B', sequence: 1 },
         { name: 'c', status: 'done', token: 'C', sequence: 3 },
         { name: 'd', status: 'archived', token: 'D', sequence: 0 },
+        { name: 'idea', status: 'ideas', token: 'IDEA', sequence: 4 },
       ]
       const groups = __test.groupByStatus(items, false)
       results.board.groupKeys = Object.keys(groups)
