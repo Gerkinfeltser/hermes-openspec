@@ -610,15 +610,15 @@ check(!source.includes('Tabs.Trigger'), 'No Tabs.Trigger (use TabsTrigger instea
   check(effectMatch, 'Reset effect depends on sourceId')
 }
 
-// 6b. SpecsView: source-matching gate prevents stale queries
+// 6b. SpecsView: source-matching gate — component remounts via key prop
 {
   const specsStart = source.indexOf('function SpecsView')
   const nextFnSpecs = source.indexOf('\nfunction ', specsStart + 1)
   const specsSection = source.slice(specsStart, nextFnSpecs > 0 ? nextFnSpecs : source.length)
-  check(specsSection.includes('selectedSourceId'),
-    'SpecsView tracks selectedSourceId for stale-source prevention')
-  check(specsSection.match(/enabled:.*selectedSourceId\s*===\s*sourceId/),
-    'specQuery enabled gates on sourceId match')
+  check(!specsSection.includes('selectedSourceId'),
+    'SpecsView no longer tracks selectedSourceId (removed dead code)')
+  check(!specsSection.match(/enabled:.*selectedSourceId\s*===\s*sourceId/),
+    'specQuery enabled no longer gates on selectedSourceId match')
 }
 
 // 7. renderInline returns JSX elements, not plain objects

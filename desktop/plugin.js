@@ -219,7 +219,7 @@ function laneWidth(status, collapsedSet) {
   return (collapsedSet && collapsedSet[status]) ? LANE_COLLAPSED_WIDTH : LANE_EXPANDED_WIDTH
 }
 
-function railStyle(label, status) {
+function railStyle() {
   return {
     width: LANE_COLLAPSED_WIDTH + 'px',
     minWidth: LANE_COLLAPSED_WIDTH + 'px',
@@ -483,7 +483,7 @@ function MarkdownElement(el) {
 function MarkdownView({ content }) {
   var elements = renderMarkdown(content)
   if (!elements || elements.length === 0) return jsx(EmptyState, { title: 'No content', description: 'This document is empty.' })
-  return jsxs('div', { style: { padding: '12px' }, children: elements.map(function(el, i) { return jsx(MarkdownElement, Object.assign({}, el, { key: i })) }) })
+  return jsxs('div', { 'data-selectable-text': 'true', style: { padding: '12px' }, children: elements.map(function(el, i) { return jsx(MarkdownElement, Object.assign({}, el, { key: i })) }) })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -617,6 +617,7 @@ function BoardCard({ item, sourceId, sourceToken, onSelect }) {
       'flex flex-col gap-1'
     ),
     style: { background: 'var(--ui-bg-elevated)', borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
+    'data-selectable-text': 'true',
     onClick: onClick,
     children: [
       jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }, children: [
@@ -645,13 +646,13 @@ var COLUMN_LABELS = {
   'archived': 'Archived',
 }
 
-function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand }) {
+function BoardColumn({ status, items, sourceId, sourceToken, onSelect, collapsed, onExpand }) {
   var label = COLUMN_LABELS[status] || status
   var sorted = sortItems(items)
   var count = items.length
 
   if (collapsed) {
-    return jsx('div', { style: railStyle(label, status), onClick: onExpand, title: label, children: [
+    return jsx('div', { style: railStyle(), onClick: onExpand, title: label, children: [
       jsx('span', { style: { display: 'grid', height: '20px', placeItems: 'center', flexShrink: 0 }, children: [
         jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status) } }),
       ] }),
@@ -673,6 +674,7 @@ function BoardColumn({ status, items, sourceId, onSelect, collapsed, onExpand })
       return jsx(BoardCard, {
         item: item,
         sourceId: sourceId,
+        sourceToken: sourceToken,
         onSelect: onSelect,
       }, item.token || item.name || item.title)
     }) }),
@@ -708,9 +710,9 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
   var token = change.token || change.name || ''
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
-    jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
-      jsxs('div', { style: { marginBottom: '12px' }, children: [
-        jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
+ jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+   jsxs('div', { style: { marginBottom: '12px' }, children: [
+     jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
           jsx(CopyButton, { text: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
           data.taskStats ? jsx(Badge, { variant: 'outline', children: data.taskStats.done + '/' + data.taskStats.total + ' tasks' }) : null,
@@ -730,7 +732,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
 
 function TaskView({ content }) {
   var parsed = parseTasks(content)
-  return jsxs('div', { style: { padding: '12px' }, children: [
+  return jsxs('div', { 'data-selectable-text': 'true', style: { padding: '12px' }, children: [
     jsxs('div', { style: { marginBottom: '12px', color: 'var(--muted-foreground, #888)', fontSize: '13px' }, children: [
       parsed.done + ' of ' + parsed.total + ' tasks completed',
     ] }),
@@ -771,7 +773,7 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
   var stripped = stripFrontmatter(content)
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
-    jsxs(DialogContent, { style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+    jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
       jsxs('div', { style: { marginBottom: '12px' }, children: [
         jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
@@ -787,15 +789,28 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
 // Change spec detail — Proposed and Diff views
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function DiffModePanel({ data }) {
+  var [diffMode, setDiffMode] = React.useState('semantic')
+  var effMode = effectiveDiffMode(diffMode, data)
+  return jsxs('div', { children: [
+    hasDiffMode(data, 'semantic') || hasDiffMode(data, 'split') || hasDiffMode(data, 'raw') ? jsxs('div', { style: { display: 'flex', gap: '4px', marginBottom: '8px' }, children: [
+      hasDiffMode(data, 'semantic') ? jsx(Button, { variant: effMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
+      hasDiffMode(data, 'split') ? jsx(Button, { variant: effMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
+      hasDiffMode(data, 'raw') ? jsx(Button, { variant: effMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
+    ] }) : null,
+    effMode === 'semantic' && hasDiffMode(data, 'semantic') ? jsx(SemanticDiffView, { data: data.semantic_diff }) : null,
+    effMode === 'split' && hasDiffMode(data, 'split') ? jsx(SplitDiffView, { before: data.before, after: data.after }) : null,
+    effMode === 'raw' && hasDiffMode(data, 'raw') ? jsx(RawDiffView, { diff: data.diff || data.raw_diff }) : null,
+  ] })
+}
+
 function SpecsDetailView({ specs }) {
   var [selectedIdx, setSelectedIdx] = React.useState(0)
-  var [diffMode, setDiffMode] = React.useState('semantic')
 
   if (!specs || specs.length === 0) return jsx(EmptyState, { title: 'No specs', description: 'No spec changes in this change.' })
   var spec = specs[selectedIdx] || specs[0]
-  var effMode = effectiveDiffMode(diffMode, spec)
 
-  return jsxs('div', { style: { padding: '12px' }, children: [
+  return jsxs('div', { 'data-selectable-text': 'true', style: { padding: '12px' }, children: [
     specs.length > 1 ? jsxs('div', { style: { marginBottom: '8px' }, children: [
       jsx('select', {
         value: selectedIdx,
@@ -806,14 +821,7 @@ function SpecsDetailView({ specs }) {
     ] }) : null,
     spec.path ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', marginBottom: '8px', fontFamily: 'monospace' }, children: spec.path }) : null,
     spec.status ? jsx(Badge, { variant: 'outline', style: { marginBottom: '8px' }, children: spec.status }) : null,
-    hasDiffMode(spec, 'semantic') || hasDiffMode(spec, 'split') || hasDiffMode(spec, 'raw') ? jsxs('div', { style: { display: 'flex', gap: '4px', marginBottom: '8px' }, children: [
-      hasDiffMode(spec, 'semantic') ? jsx(Button, { variant: effMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
-      hasDiffMode(spec, 'split') ? jsx(Button, { variant: effMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
-      hasDiffMode(spec, 'raw') ? jsx(Button, { variant: effMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
-    ] }) : null,
-    effMode === 'semantic' && hasDiffMode(spec, 'semantic') ? jsx(SemanticDiffView, { data: spec.semantic_diff }) : null,
-    effMode === 'split' && hasDiffMode(spec, 'split') ? jsx(SplitDiffView, { before: spec.before, after: spec.after }) : null,
-    effMode === 'raw' && hasDiffMode(spec, 'raw') ? jsx(RawDiffView, { diff: spec.diff || spec.raw_diff }) : null,
+    jsx(DiffModePanel, { data: spec }),
     spec.content ? jsx(MarkdownView, { content: spec.content }) : null,
   ] })
 }
@@ -954,6 +962,7 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
         status: status,
         items: items,
         sourceId: source.id,
+        sourceToken: sourceToken,
         onSelect: onSelectItem,
         collapsed: !!collapsedSet[status],
         onExpand: function() { toggleCollapse(status) },
@@ -975,19 +984,17 @@ function SpecsView({ api, sourceId }) {
   })
 
   var [selectedFile, setSelectedFile] = React.useState(null)
-  var [selectedSourceId, setSelectedSourceId] = React.useState(null)
 
-  // Reset selected file when source changes to avoid stale old-source requests
+  // Reset selected file when source changes — component remounts via key prop
   React.useEffect(function() {
     setSelectedFile(null)
-    setSelectedSourceId(null)
   }, [sourceId])
 
-  // Gate spec query on source match — never query old source with stale path
+  // Gate spec query on file selection
   var specQuery = useQuery({
     queryKey: ['openspec', 'spec', sourceId, selectedFile],
     queryFn: function() { return api.spec(sourceId, selectedFile) },
-    enabled: !!selectedFile && selectedSourceId === sourceId && !worktree,
+    enabled: !!selectedFile && !worktree,
   })
 
   var files = (query.data && query.data.files) || []
@@ -1038,24 +1045,15 @@ function SpecsView({ api, sourceId }) {
 
 function WorktreeDetailView({ sourceId, file, files }) {
   var fileInfo = files.find(function(f) { return (f.path || f.name || f) === file }) || {}
-  var [diffMode, setDiffMode] = React.useState('semantic')
 
   var data = fileInfo
-  var effMode = effectiveDiffMode(diffMode, data)
 
   return jsxs('div', { style: { padding: '12px' }, children: [
     jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }, children: [
       jsx('h3', { style: { fontSize: '14px', fontWeight: 500, margin: 0, color: 'var(--foreground, #e0e0e0)' }, children: file }),
       fileInfo.status ? jsx(Badge, { variant: 'outline', children: fileInfo.status }) : null,
     ] }),
-    hasDiffMode(data, 'semantic') || hasDiffMode(data, 'split') || hasDiffMode(data, 'raw') ? jsxs('div', { style: { display: 'flex', gap: '4px', marginBottom: '12px' }, children: [
-      hasDiffMode(data, 'semantic') ? jsx(Button, { variant: effMode === 'semantic' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('semantic') }, children: 'Semantic' }) : null,
-      hasDiffMode(data, 'split') ? jsx(Button, { variant: effMode === 'split' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('split') }, children: 'Side-by-side' }) : null,
-      hasDiffMode(data, 'raw') ? jsx(Button, { variant: effMode === 'raw' ? 'default' : 'outline', size: 'sm', onClick: function() { setDiffMode('raw') }, children: 'Raw' }) : null,
-    ] }) : null,
-    effMode === 'semantic' && hasDiffMode(data, 'semantic') ? jsx(SemanticDiffView, { data: data.semantic_diff }) : null,
-    effMode === 'split' && hasDiffMode(data, 'split') ? jsx(SplitDiffView, { before: data.before, after: data.after }) : null,
-    effMode === 'raw' && hasDiffMode(data, 'raw') ? jsx(RawDiffView, { diff: data.diff || data.raw_diff }) : null,
+    jsx(DiffModePanel, { data: data }),
     !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && data.content ? jsx(MarkdownView, { content: data.content }) : null,
     !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && !data.content ? jsx(EmptyState, { title: 'No diff data', description: 'No diff representation available for this file.' }) : null,
   ] })
@@ -1203,7 +1201,7 @@ function OpenSpecPage({ api }) {
     jsx('div', { style: { flex: 1, overflow: 'hidden', padding: '12px 16px' }, children: selectedSource && selectedSource.valid !== false ? (
       view === 'work'
         ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sourceToken: selectedSource.token, onSelectItem: onSelectItem })
-        : jsx(SpecsView, { api: api, sourceId: selectedSource.id })
+        : jsx(SpecsView, { key: selectedSource.id, api: api, sourceId: selectedSource.id })
     ) : selectedSource && selectedSource.valid === false ? null : jsx(EmptyState, { title: 'Select a source', description: 'Choose a source to view its OpenSpec project.' }) }),
 
     // Detail dialog — synchronous gate: reject stale item from different source
