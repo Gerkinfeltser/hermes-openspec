@@ -710,7 +710,7 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
   var token = change.token || change.name || ''
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
- jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+ jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', paddingRight: '2rem', maxWidth: '800px', maxHeight: '70vh', overflowY: 'auto' }, children: [
    jsxs('div', { style: { marginBottom: '12px' }, children: [
      jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
@@ -773,7 +773,7 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
   var stripped = stripFrontmatter(content)
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
-    jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', maxWidth: '800px', maxHeight: '70vh', overflow: 'auto' }, children: [
+    jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', paddingRight: '2rem', maxWidth: '800px', maxHeight: '70vh', overflowY: 'auto' }, children: [
       jsxs('div', { style: { marginBottom: '12px' }, children: [
         jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
@@ -822,7 +822,7 @@ function SpecsDetailView({ specs }) {
     spec.path ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', marginBottom: '8px', fontFamily: 'monospace' }, children: spec.path }) : null,
     spec.status ? jsx(Badge, { variant: 'outline', style: { marginBottom: '8px' }, children: spec.status }) : null,
     jsx(DiffModePanel, { data: spec }),
-    spec.content ? jsx(MarkdownView, { content: spec.content }) : null,
+    spec.content ? jsx(MarkdownView, { content: stripFrontmatter(spec.content) }) : null,
   ] })
 }
 
@@ -1024,7 +1024,7 @@ function SpecsView({ api, sourceId }) {
               'px-3 py-2 cursor-pointer text-sm rounded-md',
               isSelected ? 'bg-(--ui-selected-background, #2a2a2a) text-foreground' : 'text-muted-foreground hover:bg-(--ui-hover-background, #1a1a1a)'
             ),
-            onClick: function() { setSelectedFile(path); setSelectedSourceId(sourceId) },
+            onClick: function() { setSelectedFile(path) },
             children: [
               jsx('div', { style: { fontFamily: 'monospace', fontSize: '12px' }, children: path }),
               file.status ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', marginTop: '2px' }, children: file.status }) : null,
@@ -1036,7 +1036,7 @@ function SpecsView({ api, sourceId }) {
         worktree && selectedFile ? jsx(WorktreeDetailView, { sourceId: sourceId, file: selectedFile, files: files }) : null,
         !worktree && selectedFile && specQuery.isLoading ? jsx(Loader, { type: 'lemniscate-bloom' }) : null,
         !worktree && selectedFile && specQuery.error ? jsx(RetryErrorState, { title: 'Failed to load spec', description: specQuery.error.message, onRetry: function() { specQuery.refetch() } }) : null,
-        !worktree && selectedFile && !specQuery.isLoading && !specQuery.error ? jsx(MarkdownView, { content: specQuery.data && specQuery.data.content }) : null,
+        !worktree && selectedFile && !specQuery.isLoading && !specQuery.error ? jsx(MarkdownView, { content: stripFrontmatter(specQuery.data && specQuery.data.content) }) : null,
         !selectedFile ? jsx(EmptyState, { title: 'Select a file', description: 'Choose a spec file from the list to view its content.' }) : null,
       ] }),
     ] }) : null,
@@ -1054,7 +1054,7 @@ function WorktreeDetailView({ sourceId, file, files }) {
       fileInfo.status ? jsx(Badge, { variant: 'outline', children: fileInfo.status }) : null,
     ] }),
     jsx(DiffModePanel, { data: data }),
-    !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && data.content ? jsx(MarkdownView, { content: data.content }) : null,
+    !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && data.content ? jsx(MarkdownView, { content: stripFrontmatter(data.content) }) : null,
     !hasDiffMode(data, 'semantic') && !hasDiffMode(data, 'split') && !hasDiffMode(data, 'raw') && !data.content ? jsx(EmptyState, { title: 'No diff data', description: 'No diff representation available for this file.' }) : null,
   ] })
 }

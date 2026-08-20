@@ -619,6 +619,8 @@ check(!source.includes('Tabs.Trigger'), 'No Tabs.Trigger (use TabsTrigger instea
     'SpecsView no longer tracks selectedSourceId (removed dead code)')
   check(!specsSection.match(/enabled:.*selectedSourceId\s*===\s*sourceId/),
     'specQuery enabled no longer gates on selectedSourceId match')
+  check(!specsSection.includes('setSelectedSourceId'),
+    'SpecsView no longer calls setSelectedSourceId (removed dead code)')
 }
 
 // 7. renderInline returns JSX elements, not plain objects
@@ -645,6 +647,29 @@ check(source.includes('Object.freeze'), '__test export uses Object.freeze')
 {
   const dialogLoadingMatch = source.match(/Dialog.*open.*onOpenChange.*DialogContent/)
   check(dialogLoadingMatch, 'Dialog loading state wraps content in DialogContent')
+}
+
+// 11. Dialog close button / scrollbar overlap fix
+// ChangeDetailDialog and IdeaDetailDialog must use overflowY (not overflow) and
+// paddingRight to prevent the close X from overlapping the scrollbar at the top edge.
+{
+  var cdStart = source.indexOf('function ChangeDetailDialog')
+  var cdEnd = source.indexOf('\nfunction ', cdStart + 1)
+  var cdSection = source.slice(cdStart, cdEnd > 0 ? cdEnd : source.length)
+  check(cdSection.includes('overflowY'), 'ChangeDetailDialog uses overflowY (not overflow) to avoid close/scrollbar overlap')
+  check(cdSection.includes("'2rem'"), 'ChangeDetailDialog has paddingRight: 2rem for close button clearance')
+}
+{
+  var idStart = source.indexOf('function IdeaDetailDialog')
+  var idEnd = source.indexOf('\nfunction ', idStart + 1)
+  var idSection = source.slice(idStart, idEnd > 0 ? idEnd : source.length)
+  check(idSection.includes('overflowY'), 'IdeaDetailDialog uses overflowY (not overflow) to avoid close/scrollbar overlap')
+  check(idSection.includes("'2rem'"), 'IdeaDetailDialog has paddingRight: 2rem for close button clearance')
+}
+// No scrollable DialogContent should use overflow: 'auto' (causes close X / scrollbar overlap)
+{
+  var overflowAutoMatches = source.match(/DialogContent[^}]*overflow:\s*'auto'/g)
+  check(!overflowAutoMatches, 'No DialogContent uses overflow: auto (causes close/scrollbar overlap)')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
