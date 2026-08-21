@@ -315,6 +315,18 @@ if (cardNode) {
     return cls.includes('bg-(--ui-bg-elevated)')
   })()
   results.card.noInlineBg = !(cardNode && cardNode.props && cardNode.props.style && cardNode.props.style.background)
+  results.card.focusWashExact = (function() {
+    var cnv = cardNode && cardNode.props && cardNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('focus-visible:bg-(--ui-control-hover-background)')
+  })()
+  results.card.noDeadOutline = (function() {
+    var cnv = cardNode && cardNode.props && cardNode.props.className
+    if (!cnv) return true
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return !cls.includes('focus-visible:outline-2') && !cls.includes('focus-visible:outline-(--ui-focus-border)')
+  })()
 }
 
 const SPARSE_ITEM = { token: 'os_x1', name: 'bare-card' }
@@ -374,6 +386,18 @@ if (railNode) {
     return cls.includes('bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)]')
   })()
   results.rail.noInlineBg = !(railNode && railNode.props && railNode.props.style && railNode.props.style.background)
+  results.rail.focusWashExact = (function() {
+    var cnv = railNode && railNode.props && railNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('focus-visible:bg-(--ui-control-hover-background)')
+  })()
+  results.rail.noDeadOutline = (function() {
+    var cnv = railNode && railNode.props && railNode.props.className
+    if (!cnv) return true
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return !cls.includes('focus-visible:outline-2') && !cls.includes('focus-visible:outline-(--ui-focus-border)')
+  })()
 }
 
 // ---- 1.4b retained-source restoration across the loading window ----
@@ -1647,6 +1671,26 @@ console.log('\n[Remediation 3.10] CSS-cascade base backgrounds')
     JSON.stringify(rl.baseBgClass))
   check(rl.noInlineBg === true, 'Collapsed rail node has no inline style.background', JSON.stringify(rl.noInlineBg))
   check(rl.hoverExactRail === true, 'Collapsed rail hover remains exact hover:bg-(--ui-bg-quinary)', JSON.stringify(rl.hoverExactRail))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Remediation 3.14] Keyboard-focus wash (deep-rendered)
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Remediation 3.14] Visible keyboard focus wash')
+
+{
+  const cd = identity && identity.card ? identity.card : {}
+  check(cd.focusWashExact === true, 'Card focus wash is exact compiled focus-visible:bg-(--ui-control-hover-background)',
+    JSON.stringify(cd.focusWashExact))
+  check(cd.noDeadOutline === true, 'Card no longer relies on focus-visible:outline-2 + focus-visible:outline-(--ui-focus-border)',
+    JSON.stringify(cd.noDeadOutline))
+}
+{
+  const rl = identity && identity.rail ? identity.rail : {}
+  check(rl.focusWashExact === true, 'Collapsed rail focus wash is exact compiled focus-visible:bg-(--ui-control-hover-background)',
+    JSON.stringify(rl.focusWashExact))
+  check(rl.noDeadOutline === true, 'Collapsed rail no longer relies on focus-visible:outline-2 + focus-visible:outline-(--ui-focus-border)',
+    JSON.stringify(rl.noDeadOutline))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
