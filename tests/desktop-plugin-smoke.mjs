@@ -308,6 +308,13 @@ if (cardNode) {
     var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
     return !cls.includes('--ui-hover-background')
   })()
+  results.card.baseBgClass = (function() {
+    var cnv = cardNode && cardNode.props && cardNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('bg-(--ui-bg-elevated)')
+  })()
+  results.card.noInlineBg = !(cardNode && cardNode.props && cardNode.props.style && cardNode.props.style.background)
 }
 
 const SPARSE_ITEM = { token: 'os_x1', name: 'bare-card' }
@@ -360,6 +367,13 @@ if (railNode) {
     var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
     return !cls.includes('--ui-hover-background')
   })()
+  results.rail.baseBgClass = (function() {
+    var cnv = railNode && railNode.props && railNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)]')
+  })()
+  results.rail.noInlineBg = !(railNode && railNode.props && railNode.props.style && railNode.props.style.background)
 }
 
 // ---- 1.4b retained-source restoration across the loading window ----
@@ -838,7 +852,8 @@ if (r.__testAvailable) {
   check(source.includes('STATUS_TONE'), 'STATUS_TONE map present in source')
   check(source.includes("borderLeftColor: statusTone(status)"), 'BoardCard uses statusTone for left border color')
   check(source.includes("borderLeftWidth: '2px'"), 'BoardCard has 2px left border')
-  check(source.includes("background: 'var(--ui-bg-elevated)'"), 'BoardCard uses elevated surface')
+  check(!source.includes("background: 'var(--ui-bg-elevated)'"), 'BoardCard has no inline elevated background (class-based surface)')
+  check(source.includes('bg-(--ui-bg-elevated)'), 'BoardCard base class is exact compiled bg-(--ui-bg-elevated)')
   check(source.includes('border-(--ui-stroke-tertiary)'), 'BoardCard uses canonical stroke-tertiary border class')
   check(source.includes("backgroundColor: statusTone(status)"), 'Lane/rail status dot uses statusTone')
   check(!source.includes('#1a1a2e'), 'No hardcoded blue rail background')
@@ -866,7 +881,8 @@ check(source.includes("fontVariantNumeric: 'tabular-nums'"), 'Expanded header co
 // --- BoardCard ---
 console.log('  BoardCard')
 check(source.includes('border-(--ui-stroke-tertiary)'), 'Card uses canonical stroke-tertiary border class')
-check(source.includes("background: 'var(--ui-bg-elevated)'"), 'Card background is elevated surface')
+check(!source.includes("background: 'var(--ui-bg-elevated)'"), 'Card background is class-based (no inline elevated surface)')
+check(source.includes('bg-(--ui-bg-elevated)'), 'Card base class is exact compiled bg-(--ui-bg-elevated)')
 check(source.includes("borderLeftWidth: '2px'"), 'Card has 2px tone left border')
 check(source.includes("borderLeftColor: statusTone(status)"), 'Card left border uses statusTone')
 
@@ -1590,6 +1606,17 @@ console.log('\n[Interaction 1.6] Keyboard activation and interaction markers')
   check(colSec.includes('handleActivateKey'), 'Rail uses shared Enter/Space handler')
   check(colSec.includes('backgroundColor: statusTone(status)'), 'Rail keeps status dot')
 }
+// --- CSS-cascade base backgrounds: railStyle loses inline background, rail uses compiled class ---
+{
+  const railFnStart = source.indexOf('function railStyle')
+  const railFnEnd = source.indexOf('\n}', railFnStart + 1)
+  const railFnSec = source.slice(railFnStart, railFnEnd > 0 ? railFnEnd : source.length)
+  check(!railFnSec.includes('background'), 'railStyle has no inline background (class-based wash)')
+  check(source.includes('bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)]'),
+    'Collapsed rail base class is exact compiled bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)]')
+  check(source.includes("background: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)'"),
+    'Expanded lane keeps inline color-mix background')
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [Remediation 3.6] Source copy-before-name ordering (deep-rendered)
@@ -1601,6 +1628,25 @@ console.log('\n[Remediation 3.6] Source copy control order')
   check(sr.__error === undefined, 'Source-row deep render executed without error', sr.__error || '')
   check(sr.copyImmediatelyBeforeName === true, 'Source CopyButton renders immediately before visible source name',
     'copyIndex=' + sr.copyIndex + ' nameIndex=' + sr.nameIndex)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Remediation 3.10] CSS-cascade base backgrounds (deep-rendered)
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Remediation 3.10] CSS-cascade base backgrounds')
+
+{
+  const cd = identity && identity.card ? identity.card : {}
+  check(cd.baseBgClass === true, 'Card base class is exact compiled bg-(--ui-bg-elevated)', JSON.stringify(cd.baseBgClass))
+  check(cd.noInlineBg === true, 'Card node has no inline style.background', JSON.stringify(cd.noInlineBg))
+  check(cd.hoverExactCard === true, 'Card hover remains exact hover:bg-primary/[0.06]', JSON.stringify(cd.hoverExactCard))
+}
+{
+  const rl = identity && identity.rail ? identity.rail : {}
+  check(rl.baseBgClass === true, 'Collapsed rail base class is exact compiled bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)]',
+    JSON.stringify(rl.baseBgClass))
+  check(rl.noInlineBg === true, 'Collapsed rail node has no inline style.background', JSON.stringify(rl.noInlineBg))
+  check(rl.hoverExactRail === true, 'Collapsed rail hover remains exact hover:bg-(--ui-bg-quinary)', JSON.stringify(rl.hoverExactRail))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

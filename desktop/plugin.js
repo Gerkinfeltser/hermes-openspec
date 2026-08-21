@@ -311,7 +311,6 @@ function railStyle() {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '4px',
-    background: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)',
     borderRadius: '8px',
     padding: '8px 0',
     overflow: 'hidden',
@@ -694,11 +693,11 @@ function BoardCard({ item, source, allSources, allItems, onSelect }) {
   var status = normalizeStatus(item.status || item.state || item.phase)
   return jsxs('div', {
     className: cn(
-      'rounded-md border border-(--ui-stroke-tertiary) p-3 cursor-pointer',
+      'rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-elevated) p-3 cursor-pointer',
       'hover:border-(--ui-focus-border) hover:bg-primary/[0.06] hover:shadow-md transition-colors',
       'focus-visible:outline-2 focus-visible:outline-(--ui-focus-border)'
     ),
-    style: { background: 'var(--ui-bg-elevated)', borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
+    style: { borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
     'data-selectable-text': 'true',
     tabIndex: 0,
     role: 'button',
@@ -744,7 +743,7 @@ function BoardColumn({ status, items, source, allSources, allItems, onSelect, co
   if (collapsed) {
     return jsx('div', {
       style: railStyle(),
-      className: cn('focus-visible:outline-2 focus-visible:outline-(--ui-focus-border) hover:bg-(--ui-bg-quinary)'),
+      className: cn('focus-visible:outline-2 focus-visible:outline-(--ui-focus-border) bg-[color-mix(in_srgb,var(--ui-bg-quinary)_50%,transparent)] hover:bg-(--ui-bg-quinary)'),
       tabIndex: 0,
       role: 'button',
       onClick: onExpand,
