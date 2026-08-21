@@ -695,7 +695,7 @@ function BoardCard({ item, source, allSources, allItems, onSelect }) {
   return jsxs('div', {
     className: cn(
       'rounded-md border border-(--ui-stroke-tertiary) p-3 cursor-pointer',
-      'hover:border-(--ui-focus-border) hover:bg-(--ui-hover-background, #1a1a1a) hover:shadow-md transition-colors',
+      'hover:border-(--ui-focus-border) hover:bg-primary/[0.06] hover:shadow-md transition-colors',
       'focus-visible:outline-2 focus-visible:outline-(--ui-focus-border)'
     ),
     style: { background: 'var(--ui-bg-elevated)', borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
@@ -744,7 +744,7 @@ function BoardColumn({ status, items, source, allSources, allItems, onSelect, co
   if (collapsed) {
     return jsx('div', {
       style: railStyle(),
-      className: cn('focus-visible:outline-2 focus-visible:outline-(--ui-focus-border) hover:bg-(--ui-hover-background, #1a1a1a)'),
+      className: cn('focus-visible:outline-2 focus-visible:outline-(--ui-focus-border) hover:bg-(--ui-bg-quinary)'),
       tabIndex: 0,
       role: 'button',
       onClick: onExpand,
@@ -1306,8 +1306,8 @@ function OpenSpecPage({ api, sessionStore }) {
 
     // Source info line
     selectedSource ? jsxs('div', { style: { padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--muted-foreground, #888)', borderBottom: '1px solid var(--ui-border, #333)' }, children: [
-      jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
       jsx(CopyButton, { appearance: 'icon', text: sourceRef, label: 'Copy source reference', title: sourceRef, disabled: !sourceRef }),
+      jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
       jsx('span', { style: { fontFamily: 'monospace', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: shortToken }),
       selectedSource.path ? jsx('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }, title: selectedSource.path, children: selectedSource.path }) : null,
       jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Edit source', 'aria-label': 'Edit source', onClick: handleEditSource, children: '\u270E' }),

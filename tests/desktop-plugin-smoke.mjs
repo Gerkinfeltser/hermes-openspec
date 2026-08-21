@@ -296,6 +296,18 @@ if (cardNode) {
   results.card.taskFraction = t.CardTaskFraction ? JSON.stringify(t.CardTaskFraction({ item: CARD_ITEM })).includes('2/5 tasks') : null
   results.card.leftBadges = t.CardArtifacts ? JSON.stringify(t.CardArtifacts({ item: CARD_ITEM })).includes('proposal') && JSON.stringify(t.CardArtifacts({ item: CARD_ITEM })).includes('tasks') : null
   results.card.statusBorder = !!(cardNode.props.style && cardNode.props.style.borderLeftColor)
+  results.card.hoverExactCard = (function() {
+    var cnv = cardNode && cardNode.props && cardNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('hover:bg-primary/[0.06]')
+  })()
+  results.card.hoverGenericAbsent = (function() {
+    var cnv = cardNode && cardNode.props && cardNode.props.className
+    if (!cnv) return true
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return !cls.includes('--ui-hover-background')
+  })()
 }
 
 const SPARSE_ITEM = { token: 'os_x1', name: 'bare-card' }
@@ -336,6 +348,18 @@ if (railNode) {
   results.rail.roleButton = railNode.props.role === 'button'
   results.rail.hasKeyDown = typeof railNode.props.onKeyDown === 'function'
   results.rail.dotTonePresent = JSON.stringify(railNode).includes('var(--ui-text-secondary)')
+  results.rail.hoverExactRail = (function() {
+    var cnv = railNode && railNode.props && railNode.props.className
+    if (!cnv) return false
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return cls.includes('hover:bg-(--ui-bg-quinary)')
+  })()
+  results.rail.hoverGenericAbsent = (function() {
+    var cnv = railNode && railNode.props && railNode.props.className
+    if (!cnv) return true
+    var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
+    return !cls.includes('--ui-hover-background')
+  })()
 }
 
 // ---- 1.4b retained-source restoration across the loading window ----
@@ -366,6 +390,7 @@ const reactShim2 = 'export function useState(v){const i=globalThis.__openspecHoo
 
 const sdkUrl2 = 'data:text/javascript,' + encodeURIComponent(sdkShim2)
 const reactUrl2 = 'data:text/javascript,' + encodeURIComponent(reactShim2)
+const sdkMod2 = await import(sdkUrl2)
 const blobSrc2 = pluginSrc
   .replace(/from\\s+['"]@hermes\\/plugin-sdk['"]/g, "from '" + sdkUrl2 + "'")
   .replace(/from\\s+['"]react\\/jsx-runtime['"]/g, "from '" + jsxUrl + "'")
@@ -447,6 +472,27 @@ try {
   results.mount.genuinelyEmpty = mountSequence('src-b', [
     { data: undefined, isLoading: true }, { data: empty, isLoading: false }
   ])
+
+  // ---- 3.6 remediation: source copy control immediately before source name ----
+  results.sourceRow = {}
+  try {
+    shimHooks.hookIdx = 0; shimHooks.stateReg = []; shimHooks.effects = []; shimHooks.lastDeps = []
+    const store3 = t.createSessionStore()
+    store3.selectedSourceId = SRC_B.id
+    queryBox.data = populated
+    queryBox.isLoading = false
+    queryBox.error = null
+    const rowNode = renderPage(store3)
+    const ordered = []
+    walk(rowNode, function(n) { ordered.push(n) })
+    const copyIdx = ordered.findIndex(function(n) { return n.component === sdkMod2.CopyButton && n.props && n.props.label === 'Copy source reference' })
+    const nameIdx = ordered.findIndex(function(n) { return n.props && n.props.children === SRC_B.name && n.props.style && n.props.style.fontWeight === 600 })
+    results.sourceRow.copyIndex = copyIdx
+    results.sourceRow.nameIndex = nameIdx
+    results.sourceRow.copyImmediatelyBeforeName = copyIdx >= 0 && nameIdx >= 0 && copyIdx + 1 === nameIdx
+  } catch (e) {
+    results.sourceRow.__error = (e && e.message ? e.message : String(e)).slice(0, 800)
+  }
 } catch (e) {
   results.mount.__error = (e && e.message ? e.message : String(e)).slice(0, 800)
 }
@@ -1443,6 +1489,8 @@ console.log('\n[Identity 1.5] Copy controls, detail identity, footer layout')
   check(cd.leftBadges === true, 'Populated card renders proposal/tasks badges', JSON.stringify(cd.leftBadges))
   check(cd.taskFraction === true, 'Task fraction stays in populated footer', JSON.stringify(cd.taskFraction))
   check(cd.statusBorder === true, 'Status-colored border preserved on card', JSON.stringify(cd.statusBorder))
+  check(cd.hoverExactCard === true, 'Card hover uses exact bundled-Kanban utility hover:bg-primary/[0.06]', JSON.stringify(cd.hoverExactCard))
+  check(cd.hoverGenericAbsent === true, 'Card hover no longer uses generic --ui-hover-background', JSON.stringify(cd.hoverGenericAbsent))
 }
 
 {
@@ -1513,6 +1561,8 @@ console.log('\n[Interaction 1.6] Keyboard activation and interaction markers')
   check(rl.roleButton === true, 'Collapsed rail has button semantics', JSON.stringify(rl.roleButton))
   check(rl.hasKeyDown === true, 'Collapsed rail wires keydown handler', JSON.stringify(rl.hasKeyDown))
   check(rl.dotTonePresent === true, 'Status dot preserved on collapsed rail', JSON.stringify(rl.dotTonePresent))
+  check(rl.hoverExactRail === true, 'Collapsed rail hover uses exact bundled-Kanban utility hover:bg-(--ui-bg-quinary)', JSON.stringify(rl.hoverExactRail))
+  check(rl.hoverGenericAbsent === true, 'Collapsed rail hover no longer uses generic --ui-hover-background', JSON.stringify(rl.hoverGenericAbsent))
 }
 // Static interaction markers — hover/focus-visible + shared handler + status preservation
 {
@@ -1521,6 +1571,8 @@ console.log('\n[Interaction 1.6] Keyboard activation and interaction markers')
   const bcSec = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
   check(bcSec.includes('focus-visible'), 'Card has focus-visible marker')
   check(bcSec.includes('hover:'), 'Card has hover marker')
+  check(bcSec.includes('hover:bg-primary/[0.06]'), 'Card hover marker is exact bundled-Kanban utility hover:bg-primary/[0.06]')
+  check(!bcSec.includes('--ui-hover-background'), 'Card has no generic --ui-hover-background hover marker')
   check(bcSec.includes('tabIndex: 0'), 'Card sets tabIndex 0')
   check(bcSec.includes('onKeyDown'), 'Card wires onKeyDown')
   check(bcSec.includes('handleActivateKey'), 'Card uses shared Enter/Space handler')
@@ -1531,10 +1583,24 @@ console.log('\n[Interaction 1.6] Keyboard activation and interaction markers')
   const colEnd = source.indexOf('\nfunction ', colStart + 1)
   const colSec = source.slice(colStart, colEnd > 0 ? colEnd : source.length)
   check(colSec.includes('focus-visible'), 'Collapsed rail has focus-visible marker')
+  check(colSec.includes('hover:bg-(--ui-bg-quinary)'), 'Collapsed rail hover marker is exact bundled-Kanban utility hover:bg-(--ui-bg-quinary)')
+  check(!colSec.includes('--ui-hover-background'), 'Collapsed rail has no generic --ui-hover-background hover marker')
   check(colSec.includes('tabIndex: 0'), 'Rail sets tabIndex 0')
   check(colSec.includes('onKeyDown'), 'Rail wires onKeyDown')
   check(colSec.includes('handleActivateKey'), 'Rail uses shared Enter/Space handler')
   check(colSec.includes('backgroundColor: statusTone(status)'), 'Rail keeps status dot')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Remediation 3.6] Source copy-before-name ordering (deep-rendered)
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Remediation 3.6] Source copy control order')
+
+{
+  const sr = identity && identity.sourceRow ? identity.sourceRow : {}
+  check(sr.__error === undefined, 'Source-row deep render executed without error', sr.__error || '')
+  check(sr.copyImmediatelyBeforeName === true, 'Source CopyButton renders immediately before visible source name',
+    'copyIndex=' + sr.copyIndex + ' nameIndex=' + sr.nameIndex)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
