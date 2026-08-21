@@ -109,6 +109,87 @@ function stripFrontmatter(content) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Resolver-safe identity helpers — pure, testable, canonical-aligned
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildSourceReference(source, allSources) {
+  if (!source) return ''
+  var name = String(source.name || '').trim()
+  if (name) {
+    var count = 0
+    for (var i = 0; i < (allSources || []).length; i++) {
+      var other = allSources[i]
+      if (other && String(other.name || '').trim().toLowerCase() === name.toLowerCase()) count++
+    }
+    if (count === 1) return name
+  }
+  var token = String(source.token || '').trim()
+  if (token) return token
+  var id = String(source.id || '').trim()
+  if (id) return id
+  return ''
+}
+
+function buildItemReference(source, item, allSources) {
+  var sourceRef = buildSourceReference(source, allSources)
+  var token = item && item.token ? String(item.token).trim() : ''
+  if (!sourceRef || !token) return ''
+  return sourceRef + '/' + token
+}
+
+function hasUniqueItemToken(item, allItems) {
+  var token = item && item.token ? String(item.token).trim() : ''
+  if (!token) return false
+  var count = 0
+  for (var i = 0; i < (allItems || []).length; i++) {
+    var other = allItems[i]
+    if (other && String(other.token || '').trim() === token) count++
+  }
+  return count === 1
+}
+
+function createSessionStore() {
+  return { selectedSourceId: null, showArchived: true }
+}
+
+function resolveRetainedSource(sources, retainedId) {
+  if (!sources || sources.length === 0) return null
+  if (retainedId != null && retainedId !== '') {
+    for (var i = 0; i < sources.length; i++) {
+      if (sources[i].id === retainedId) return retainedId
+    }
+  }
+  var fallback = selectFirstValid(sources)
+  return fallback ? fallback.id : null
+}
+
+function detailTitle(loaded, summary, item, kind) {
+  if (loaded && loaded.title) return loaded.title
+  if (summary && summary.title) return summary.title
+  if (item && item.name) return item.name
+  return kind === 'idea' ? 'Untitled idea' : 'Untitled change'
+}
+
+function detailSecondaryName(loaded, summary) {
+  if (loaded && loaded.name) return loaded.name
+  if (summary && summary.name) return summary.name
+  return ''
+}
+
+function ideaSecondaryName(name) {
+  if (!name) return ''
+  return String(name).replace(/\.md$/i, '') + '.md'
+}
+
+function handleActivateKey(e, action) {
+  if (!e) return
+  if (e.key === 'Enter' || e.key === ' ') {
+    if (typeof e.preventDefault === 'function') e.preventDefault()
+    if (action) action()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Lane override helpers — pure, testable, canonical-aligned
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -604,31 +685,40 @@ function CardArtifacts({ item }) {
   })
 }
 
-function BoardCard({ item, sourceId, sourceToken, onSelect }) {
+function BoardCard({ item, source, allSources, allItems, onSelect }) {
   var token = item.token || item.name || ''
   var title = item.title || item.name || 'Untitled'
-  var displayToken = sourceToken ? sourceToken + '/' + token : token
+  var itemRef = buildItemReference(source, item, allSources)
+  var canCopy = !!itemRef && hasUniqueItemToken(item, allItems)
   var onClick = function() { onSelect(item) }
   var status = normalizeStatus(item.status || item.state || item.phase)
   return jsxs('div', {
     className: cn(
       'rounded-md border border-(--ui-stroke-tertiary) p-3 cursor-pointer',
-      'hover:border-(--ui-focus-border) transition-colors',
-      'flex flex-col gap-1'
+      'hover:border-(--ui-focus-border) hover:bg-(--ui-hover-background, #1a1a1a) hover:shadow-md transition-colors',
+      'focus-visible:outline-2 focus-visible:outline-(--ui-focus-border)'
     ),
     style: { background: 'var(--ui-bg-elevated)', borderLeftWidth: '2px', borderLeftColor: statusTone(status) },
     'data-selectable-text': 'true',
+    tabIndex: 0,
+    role: 'button',
     onClick: onClick,
+    onKeyDown: function(e) { handleActivateKey(e, onClick) },
     children: [
       jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }, children: [
         jsx('div', { style: { fontWeight: 500, fontSize: '13px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
         typeof item.sequence === 'number' && Number.isFinite(item.sequence) ? jsx(Badge, { variant: 'outline', style: { fontSize: '10px', flexShrink: 0 }, children: '#' + item.sequence }) : null
       ] }),
-      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }, children: [
-        jsx(CopyButton, { text: displayToken, stopPropagation: true, children: jsx('span', { style: { fontSize: '11px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: displayToken }) }),
-        jsx(CardTaskFraction, { item: item }),
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }, children: [
+        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', minWidth: 0 }, children: [
+          jsx(CardArtifacts, { item: item }),
+          jsx(CardTaskFraction, { item: item }),
+        ] }),
+        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto', flexShrink: 0 }, children: [
+          canCopy ? jsx(CopyButton, { appearance: 'icon', text: itemRef, label: 'Copy item reference', title: itemRef, stopPropagation: true }) : null,
+          token ? jsx('span', { style: { fontFamily: 'monospace', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: token }) : null,
+        ] }),
       ] }),
-      jsx(CardArtifacts, { item: item }),
     ]
   }, token || title)
 }
@@ -646,19 +736,29 @@ var COLUMN_LABELS = {
   'archived': 'Archived',
 }
 
-function BoardColumn({ status, items, sourceId, sourceToken, onSelect, collapsed, onExpand }) {
+function BoardColumn({ status, items, source, allSources, allItems, onSelect, collapsed, onExpand }) {
   var label = COLUMN_LABELS[status] || status
   var sorted = sortItems(items)
   var count = items.length
 
   if (collapsed) {
-    return jsx('div', { style: railStyle(), onClick: onExpand, title: label, children: [
-      jsx('span', { style: { display: 'grid', height: '20px', placeItems: 'center', flexShrink: 0 }, children: [
-        jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status) } }),
-      ] }),
-      jsx('span', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', writingMode: 'vertical-rl' }, children: label }),
-      count > 0 ? jsx('span', { style: { fontSize: '10px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
-    ] })
+    return jsx('div', {
+      style: railStyle(),
+      className: cn('focus-visible:outline-2 focus-visible:outline-(--ui-focus-border) hover:bg-(--ui-hover-background, #1a1a1a)'),
+      tabIndex: 0,
+      role: 'button',
+      onClick: onExpand,
+      onKeyDown: function(e) { handleActivateKey(e, onExpand) },
+      title: label,
+      'aria-label': label,
+      children: [
+        jsx('span', { style: { display: 'grid', height: '20px', placeItems: 'center', flexShrink: 0 }, children: [
+          jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status) } }),
+        ] }),
+        jsx('span', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', writingMode: 'vertical-rl' }, children: label }),
+        count > 0 ? jsx('span', { style: { fontSize: '10px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
+      ]
+    })
   }
 
   return jsxs('div', { style: expandedStyle(), 'data-lane': status, children: [
@@ -673,8 +773,9 @@ function BoardColumn({ status, items, sourceId, sourceToken, onSelect, collapsed
     jsxs('div', { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }, children: sorted.map(function(item) {
       return jsx(BoardCard, {
         item: item,
-        sourceId: sourceId,
-        sourceToken: sourceToken,
+        source: source,
+        allSources: allSources,
+        allItems: allItems,
         onSelect: onSelect,
       }, item.token || item.name || item.title)
     }) }),
@@ -686,7 +787,7 @@ function BoardColumn({ status, items, sourceId, sourceToken, onSelect, collapsed
 // Change detail dialog
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ChangeDetailDialog({ api, sourceId, change, onClose }) {
+function ChangeDetailDialog({ api, sourceId, change, source, allSources, allItems, onClose }) {
   var query = useQuery({
     queryKey: ['openspec', 'change', sourceId, change.name || change.token],
     queryFn: function() { return api.change(sourceId, change.name || change.token) }
@@ -706,15 +807,20 @@ function ChangeDetailDialog({ api, sourceId, change, onClose }) {
 
   var currentTab = activeTab || (tabs.length > 0 ? tabs[0].key : null)
 
-  var title = change.title || change.name || 'Change Detail'
+  var itemRef = buildItemReference(source, change, allSources)
+  var canCopy = !!itemRef && hasUniqueItemToken(change, allItems)
+  var title = detailTitle(data, change, change, 'change')
+  var secondary = detailSecondaryName(data, change)
   var token = change.token || change.name || ''
 
   return jsxs(Dialog, { open: true, onOpenChange: onClose, children: [
  jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', paddingRight: '2rem', maxWidth: '800px', maxHeight: '70vh', overflowY: 'auto' }, children: [
    jsxs('div', { style: { marginBottom: '12px' }, children: [
      jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
+        secondary ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace', marginBottom: '4px' }, children: secondary }) : null,
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
-          jsx(CopyButton, { text: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
+          canCopy ? jsx(CopyButton, { appearance: 'icon', text: itemRef, label: 'Copy item reference', title: itemRef }) : null,
+          token ? jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) : null,
           data.taskStats ? jsx(Badge, { variant: 'outline', children: data.taskStats.done + '/' + data.taskStats.total + ' tasks' }) : null,
         ] }),
       ] }),
@@ -755,7 +861,7 @@ function TaskView({ content }) {
 // Idea detail dialog
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
+function IdeaDetailDialog({ api, sourceId, idea, source, allSources, allItems, onClose }) {
   var query = useQuery({
     queryKey: ['openspec', 'idea', sourceId, idea.name || idea.token],
     queryFn: function() { return api.idea(sourceId, idea.name || idea.token) }
@@ -765,7 +871,10 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
   if (query.error) return jsx(Dialog, { open: true, onOpenChange: onClose, children: jsx(DialogContent, { children: jsx(RetryErrorState, { title: 'Failed to load idea', description: query.error.message, onRetry: function() { query.refetch() } }) }) })
 
   var data = query.data || {}
-  var title = idea.title || idea.name || 'Idea Detail'
+  var itemRef = buildItemReference(source, idea, allSources)
+  var canCopy = !!itemRef && hasUniqueItemToken(idea, allItems)
+  var title = detailTitle(data, idea, idea, 'idea')
+  var secondary = ideaSecondaryName(detailSecondaryName(data, idea))
   var token = idea.token || idea.name || ''
 
   // Strip YAML frontmatter from content before rendering
@@ -776,8 +885,10 @@ function IdeaDetailDialog({ api, sourceId, idea, onClose }) {
     jsxs(DialogContent, { 'data-selectable-text': 'true', style: { padding: '16px', paddingRight: '2rem', maxWidth: '800px', maxHeight: '70vh', overflowY: 'auto' }, children: [
       jsxs('div', { style: { marginBottom: '12px' }, children: [
         jsx('h2', { style: { fontSize: '18px', fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground, #e0e0e0)' }, children: title }),
+        secondary ? jsx('div', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace', marginBottom: '4px' }, children: secondary }) : null,
         jsxs('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' }, children: [
-          jsx(CopyButton, { text: token, children: jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) }),
+          canCopy ? jsx(CopyButton, { appearance: 'icon', text: itemRef, label: 'Copy item reference', title: itemRef }) : null,
+          token ? jsx('span', { style: { fontSize: '12px', color: 'var(--muted-foreground, #888)', fontFamily: 'monospace' }, children: token }) : null,
         ] }),
       ] }),
       jsx(MarkdownView, { content: stripped }),
@@ -908,7 +1019,7 @@ function RawDiffView({ diff }) {
 // Work view
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function WorkView({ api, source, sourceToken, onSelectItem }) {
+function WorkView({ api, source, sources, onSelectItem, showArchived, onToggleArchived }) {
   var ideas = (source.openspec && source.openspec.ideas) || []
   var changes = (source.openspec && source.openspec.changes) || []
   var allItems = ideas.map(function(idea) {
@@ -918,7 +1029,6 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
   }))
 
   var [filter, setFilter] = React.useState('')
-  var [showArchived, setShowArchived] = React.useState(true)
   var [manualOverrides, setManualOverrides] = React.useState({})
   var prevLanePhase = React.useRef(null)
 
@@ -952,7 +1062,7 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
       jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #888)', whiteSpace: 'nowrap' }, children: 'Filter' }),
       jsx(Input, { placeholder: 'title, token, or name...', value: filter, onChange: function(e) { setFilter(e.target.value) }, style: { flex: 1 } }),
       jsxs('label', { style: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--muted-foreground, #888)', cursor: 'pointer', whiteSpace: 'nowrap' }, children: [
-        jsx('input', { type: 'checkbox', checked: showArchived, onChange: function(e) { setShowArchived(e.target.checked) } }),
+        jsx('input', { type: 'checkbox', checked: showArchived, onChange: function(e) { onToggleArchived(e.target.checked) } }),
         'Archived',
       ] }),
     ] }),
@@ -961,8 +1071,9 @@ function WorkView({ api, source, sourceToken, onSelectItem }) {
       return jsx(BoardColumn, {
         status: status,
         items: items,
-        sourceId: source.id,
-        sourceToken: sourceToken,
+        source: source,
+        allSources: sources,
+        allItems: allItems,
         onSelect: onSelectItem,
         collapsed: !!collapsedSet[status],
         onExpand: function() { toggleCollapse(status) },
@@ -1063,14 +1174,15 @@ function WorktreeDetailView({ sourceId, file, files }) {
 // Main page
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function OpenSpecPage({ api }) {
+function OpenSpecPage({ api, sessionStore }) {
   var sourcesQuery = useQuery({
     queryKey: ['openspec', 'sources'],
     queryFn: function() { return api.sources() },
   })
 
-  var [selectedSourceId, setSelectedSourceId] = React.useState(null)
+  var [selectedSourceId, setSelectedSourceId] = React.useState(sessionStore ? sessionStore.selectedSourceId : null)
   var [view, setView] = React.useState('work')
+  var [showArchived, setShowArchived] = React.useState(sessionStore ? sessionStore.showArchived : true)
   var [selectedItem, setSelectedItem] = React.useState(null) // {item, sourceId, type}
   var [sourceDialog, setSourceDialog] = React.useState(null) // {mode: 'add'|'edit'} or null
   var [removeConfirm, setRemoveConfirm] = React.useState(null) // source object or null
@@ -1079,14 +1191,26 @@ function OpenSpecPage({ api }) {
   var [initBusy, setInitBusy] = React.useState(false)
   var [initError, setInitError] = React.useState('')
 
-  // Auto-select first valid source
+  // Resolve selection after refreshed /sources data: restore the retained source
+  // while its ID remains present (including invalid sources), otherwise fall back
+  // to first-valid / first-returned; update the registration-scope store both ways.
+  // The effect is gated on data arrival: during the loading window
+  // sourcesQuery.data is still undefined, and resolving against the pre-data
+  // empty list would wipe a retained selection (both React state and the
+  // registration-scope store) before refreshed /sources data ever arrives. The
+  // retained ID survives the loading render, so resolution — and the null rule
+  // for genuinely empty results — only ever runs against the refreshed list.
   var sources = (sourcesQuery.data && sourcesQuery.data.sources) || []
   React.useEffect(function() {
-    if (sources.length > 0 && selectedSourceId === null) {
-      var valid = selectFirstValid(sources)
-      if (valid) setSelectedSourceId(valid.id)
+    if (sourcesQuery.data === undefined) return
+    var next = resolveRetainedSource(sources, selectedSourceId)
+    if (next === selectedSourceId) {
+      if (sessionStore && next !== null) sessionStore.selectedSourceId = next
+      return
     }
-  }, [sources, selectedSourceId])
+    setSelectedSourceId(next)
+    if (sessionStore) sessionStore.selectedSourceId = next
+  }, [sources, sourcesQuery.data, selectedSourceId])
 
   // Close detail on source change
   React.useEffect(function() {
@@ -1094,6 +1218,27 @@ function OpenSpecPage({ api }) {
   }, [selectedSourceId])
 
   var selectedSource = sources.find(function(s) { return s.id === selectedSourceId }) || null
+  var sourceRef = buildSourceReference(selectedSource, sources)
+  var shortToken = (selectedSource && (selectedSource.token || selectedSource.id)) || ''
+  var allItems = []
+  if (selectedSource && selectedSource.openspec) {
+    var loadedIdeas = selectedSource.openspec.ideas || []
+    var loadedChanges = selectedSource.openspec.changes || []
+    allItems = loadedIdeas.map(function(idea) {
+      return Object.assign({}, idea, { _type: 'idea' })
+    }).concat(loadedChanges.map(function(change) {
+      return Object.assign({}, change, { _type: 'change' })
+    }))
+  }
+
+  function handleSelectSource(v) {
+    setSelectedSourceId(v)
+    if (sessionStore) sessionStore.selectedSourceId = v
+  }
+  function handleToggleArchived(v) {
+    setShowArchived(v)
+    if (sessionStore) sessionStore.showArchived = v
+  }
 
   if (sourcesQuery.isLoading) return jsx(Loader, { type: 'lemniscate-bloom' })
   if (sourcesQuery.error) return jsx(RetryErrorState, { title: 'Failed to load sources', description: sourcesQuery.error.message, onRetry: function() { sourcesQuery.refetch() } })
@@ -1148,7 +1293,7 @@ function OpenSpecPage({ api }) {
       jsx('span', { style: { fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: 'Source' }),
       jsx(Select, {
         value: selectedSourceId || undefined,
-        onValueChange: function(v) { setSelectedSourceId(v) },
+        onValueChange: handleSelectSource,
         children: [
           jsx(SelectTrigger, { style: { minWidth: '120px' }, children: jsx(SelectValue, { placeholder: 'Select source' }) }),
           jsx(SelectContent, { children: sources.map(function(s) {
@@ -1162,7 +1307,8 @@ function OpenSpecPage({ api }) {
     // Source info line
     selectedSource ? jsxs('div', { style: { padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--muted-foreground, #888)', borderBottom: '1px solid var(--ui-border, #333)' }, children: [
       jsx('span', { style: { fontWeight: 600, color: 'var(--foreground, #e0e0e0)' }, children: selectedSource.name || selectedSource.id }),
-      jsx(CopyButton, { text: selectedSource.id, children: jsx(Badge, { variant: 'outline', style: { fontSize: '10px', cursor: 'pointer' }, children: selectedSource.id }) }),
+      jsx(CopyButton, { appearance: 'icon', text: sourceRef, label: 'Copy source reference', title: sourceRef, disabled: !sourceRef }),
+      jsx('span', { style: { fontFamily: 'monospace', fontSize: '10px', color: 'var(--muted-foreground, #888)' }, children: shortToken }),
       selectedSource.path ? jsx('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }, title: selectedSource.path, children: selectedSource.path }) : null,
       jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Edit source', 'aria-label': 'Edit source', onClick: handleEditSource, children: '\u270E' }),
       jsx(Button, { variant: 'ghost', size: 'sm', style: { padding: '2px 4px', fontSize: '13px', minWidth: '24px' }, title: 'Remove source', 'aria-label': 'Remove source', onClick: handleRemoveSource, children: '\u2715' }),
@@ -1200,13 +1346,13 @@ function OpenSpecPage({ api }) {
     // View body
     jsx('div', { style: { flex: 1, overflow: 'hidden', padding: '12px 16px' }, children: selectedSource && selectedSource.valid !== false ? (
       view === 'work'
-        ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sourceToken: selectedSource.token, onSelectItem: onSelectItem })
+        ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sources: sources, showArchived: showArchived, onToggleArchived: handleToggleArchived, onSelectItem: onSelectItem })
         : jsx(SpecsView, { key: selectedSource.id, api: api, sourceId: selectedSource.id })
     ) : selectedSource && selectedSource.valid === false ? null : jsx(EmptyState, { title: 'Select a source', description: 'Choose a source to view its OpenSpec project.' }) }),
 
     // Detail dialog — synchronous gate: reject stale item from different source
-    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'change' && selectedSource && selectedSource.valid !== false ? jsx(ChangeDetailDialog, { api: api, sourceId: selectedSourceId, change: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
-    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'idea' && selectedSource && selectedSource.valid !== false ? jsx(IdeaDetailDialog, { api: api, sourceId: selectedSourceId, idea: selectedItem.item, onClose: function() { setSelectedItem(null) } }) : null,
+    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'change' && selectedSource && selectedSource.valid !== false ? jsx(ChangeDetailDialog, { api: api, sourceId: selectedSourceId, change: selectedItem.item, source: selectedSource, allSources: sources, allItems: allItems, onClose: function() { setSelectedItem(null) } }) : null,
+    selectedItem && selectedItem.sourceId === selectedSourceId && selectedItem.type === 'idea' && selectedSource && selectedSource.valid !== false ? jsx(IdeaDetailDialog, { api: api, sourceId: selectedSourceId, idea: selectedItem.item, source: selectedSource, allSources: sources, allItems: allItems, onClose: function() { setSelectedItem(null) } }) : null,
 
     // Source add/edit dialog
     sourceDialog ? jsx(SourceDialog, { mode: sourceDialog.mode, api: api, source: sourceDialog.mode === 'edit' ? selectedSource : null, onClose: function() { setSourceDialog(null) }, onSaved: onSourceSaved }) : null,
@@ -1234,12 +1380,13 @@ var plugin = {
   description: 'OpenSpec source registry + project surface — sources, changes, ideas, specs, and diffs.',
   register: function(ctx) {
     var api = createApi(ctx)
+    var sessionStore = createSessionStore()
     ctx.registerMany([
       {
         id: 'page',
         area: ROUTES_AREA,
         data: { path: '/openspec' },
-        render: function() { return jsx(OpenSpecPage, { api: api }) }
+        render: function() { return jsx(OpenSpecPage, { api: api, sessionStore: sessionStore }) }
       },
       {
         id: 'nav',
@@ -1289,7 +1436,18 @@ export const __test = Object.freeze({
   pruneStaleOverrides: pruneStaleOverrides,
   BoardColumn: BoardColumn,
   BoardCard: BoardCard,
+  CardArtifacts: CardArtifacts,
+  CardTaskFraction: CardTaskFraction,
   stripFrontmatter: stripFrontmatter,
+  buildSourceReference: buildSourceReference,
+  buildItemReference: buildItemReference,
+  hasUniqueItemToken: hasUniqueItemToken,
+  createSessionStore: createSessionStore,
+  resolveRetainedSource: resolveRetainedSource,
+  detailTitle: detailTitle,
+  detailSecondaryName: detailSecondaryName,
+  ideaSecondaryName: ideaSecondaryName,
+  handleActivateKey: handleActivateKey,
   trimPath: trimPath,
   extractApiError: extractApiError,
   sourceNeedsInitialization: sourceNeedsInitialization,

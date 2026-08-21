@@ -127,3 +127,87 @@ def test_change_sequence_tool_declares_order_and_dependencies(tmp_path, monkeypa
     context = json.loads(tools.openspec_context({"identifier": "demo"}))
     final = next(item for item in context["changes"] if item["name"] == "final-proof")
     assert final["sequence"]["dependsOn"] == ["phase-one", "phase-two"]
+
+
+# ---------------------------------------------------------------------------
+# Idea resolution (ivault/os_fd3445 tasks 1.3): openspec_context must list and
+# resolve registered idea references using the same source-qualified shape as
+# changes, and must fail explicitly on cross-kind token ambiguity.
+# ---------------------------------------------------------------------------
+
+
+def _register_demo_source(tmp_path, monkeypatch):
+    """Isolate registry DB to tmp and point tools at the real registry module."""
+    monkeypatch.setattr(registry, "db_path", lambda: tmp_path / "openspec.db")
+    monkeypatch.setattr(tools, "_registry_module", lambda: registry)
+    registry.add_source(str(tmp_path), "demo")
+
+
+def _write_idea(tmp_path, stem: str, body: str = "Idea body text"):
+    ideas_root = tmp_path / "openspec" / "ideas"
+    ideas_root.mkdir(parents=True, exist_ok=True)
+    idea_file = ideas_root / f"{stem}.md"
+    idea_file.write_text(f"---\ntitle: {stem.title()}\n---\n{body}\n", encoding="utf-8")
+    return idea_file
+
+
+def test_openspec_context_lists_ideas_for_bare_source(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(tools.openspec_context({"identifier": "demo"}))
+
+    assert result["ok"] is True
+    ideas = result["ideas"]
+    assert len(ideas) == 1
+    idea = ideas[0]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+
+
+def test_openspec_context_resolves_idea_by_token(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(tools.openspec_context({"identifier": "demo/os_1655dd"}))
+
+    assert result["ok"] is True
+    idea = result["idea"]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+    assert "Idea body text" in idea["content"]
+
+
+def test_openspec_context_resolves_idea_by_literal_stem(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(
+        tools.openspec_context({"identifier": "demo/hermes-agentmail-inbox-integration"})
+    )
+
+    assert result["ok"] is True
+    idea = result["idea"]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+
+
+def test_openspec_context_reports_cross_kind_ambiguity(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    # Change folder and idea file share the same stem → identical derived token.
+    change_dir = tmp_path / "openspec" / "changes" / "same-artifact"
+    change_dir.mkdir(parents=True)
+    (change_dir / "proposal.md").write_text("# Same Artifact\n", encoding="utf-8")
+    _write_idea(tmp_path, "same-artifact")
+    token = registry.change_token("same-artifact")
+
+    result = json.loads(tools.openspec_context({"identifier": f"demo/{token}"}))
+
+    assert result["ok"] is False
+    error = result["error"].lower()
+    assert "ambiguous" in error
+    for kind in ("change", "spec", "idea"):
+        assert kind in error

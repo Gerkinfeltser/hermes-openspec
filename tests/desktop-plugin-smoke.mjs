@@ -15,9 +15,10 @@
  * Exit 0 = pass, exit 1 = failure.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { execSync } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { dirname, resolve, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -103,6 +104,357 @@ try {
   fail('Dynamic import and __test execution', (e.message || '').slice(0, 500))
   r = {}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Identity/session/interaction driver — self-contained module for fixtures that
+// exercise __test helpers and component descriptors (tasks 1.1/1.2/1.4/1.5/1.6).
+// The driver is written to a temp file and executed by node; it builds the same
+// SDK/react shims as _dynamic_import_helper.mjs, so descriptors carry real
+// component references and can be walked structurally.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function runIdentityDriver() {
+  const driverPath = join(tmpdir(), 'openspec-identity-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.mjs')
+  try {
+    writeFileSync(driverPath, IDENTITY_DRIVER, 'utf8')
+    const raw = execSync('node ' + driverPath + ' ' + pluginPath, { encoding: 'utf8', timeout: 30000 }).trim()
+    return JSON.parse(raw)
+  } catch (e) {
+    return { __driverError: (e.message || '').slice(0, 800) }
+  } finally {
+    try { rmSync(driverPath, { force: true }) } catch (e) { /* ignore */ }
+  }
+}
+
+const IDENTITY_DRIVER = `
+import { readFileSync } from 'node:fs'
+const pluginSrc = readFileSync(process.argv[2], 'utf8')
+
+const sdkExports = [
+  'cn', 'useQuery',
+  'Loader', 'EmptyState', 'ErrorState', 'Badge', 'Button',
+  'CopyButton', 'Dialog', 'DialogContent', 'Input', 'ScrollArea', 'SearchField',
+  'Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue',
+  'SegmentedControl', 'Tabs', 'TabsList', 'TabsTrigger'
+].map(n => 'export const ' + n + '=(...a)=>a').join(';')
+const sdkShim = sdkExports
+  + ';export const ROUTES_AREA="routes"'
+  + ';export const SIDEBAR_NAV_AREA="sidebar.nav"'
+  + ';export default {}'
+const reactShim = 'export function useState(v){return[v,function(){},function(){},v]};'
+  + 'export function useEffect(f,d){return undefined};'
+  + 'export function useRef(v){return{current:v}};'
+  + 'export function useCallback(f,d){return f};'
+  + 'export function useMemo(f,d){return f()};'
+  + 'export function useContext(c){return undefined};'
+  + 'export default {}'
+const jsxShim = 'export function jsx(c,p){return{component:c,props:p,_t:"jsx"}}'
+  + 'export function jsxs(c,p){return{component:c,props:p,_t:"jsxs"}}'
+  + 'export function Fragment(p){return p&&p.children}'
+
+const sdkUrl = 'data:text/javascript,' + encodeURIComponent(sdkShim)
+const reactUrl = 'data:text/javascript,' + encodeURIComponent(reactShim)
+const jsxUrl = 'data:text/javascript,' + encodeURIComponent(jsxShim)
+const sdkMod = await import(sdkUrl)
+
+const blobSrc = pluginSrc
+  .replace(/from\\s+['"]@hermes\\/plugin-sdk['"]/g, "from '" + sdkUrl + "'")
+  .replace(/from\\s+['"]react\\/jsx-runtime['"]/g, "from '" + jsxUrl + "'")
+  .replace(/from\\s+['"]react['"]/g, "from '" + reactUrl + "'")
+const mod = await import('data:text/javascript,' + encodeURIComponent(blobSrc))
+const t = mod.__test
+const plugin = mod.default
+
+function walk(node, visit) {
+  if (!node || typeof node !== 'object') return
+  if (node._t) visit(node)
+  var ch = node.props && node.props.children
+  if (Array.isArray(ch)) { for (var i = 0; i < ch.length; i++) walk(ch[i], visit) }
+  else if (ch && typeof ch === 'object') walk(ch, visit)
+}
+function collectButtons(node) {
+  var out = []
+  walk(node, function(n) { if (n.component === sdkMod.CopyButton) out.push(n.props) })
+  return out
+}
+function findByStyle(node, styleKey, styleValue) {
+  var out = []
+  walk(node, function(n) {
+    var st = n.props && n.props.style
+    if (st && st[styleKey] === styleValue) out.push(n)
+  })
+  return out
+}
+
+const results = {}
+
+// ---- 1.1 source references ----
+const SRC = { id: 'src-ivault', token: 'os_8e5049', name: 'ivault', path: '/repos/ivault' }
+const SRC_DUP = { id: 'src-other', token: 'os_dup01', name: 'Ivault', path: '/repos/other' }
+const SRC_BLANK = { id: 'src-blank', token: 'os_8e5049', name: '   ', path: '/repos/blank' }
+const SRC_ID_ONLY = { id: 'src-id-only', token: '', name: '', path: '/repos/id' }
+const SRC_NOTHING = { id: '', token: '', name: '', path: '/repos/nothing' }
+const SRC_UNIQUE = { id: 'src-unique', token: 'os_u1', name: 'ivault', path: '/repos/u' }
+const SRC_OTHER = { id: 'src-o2', token: 'os_u2', name: 'other', path: '/repos/o' }
+results.src = {}
+results.src.unique = t.buildSourceReference ? t.buildSourceReference(SRC_UNIQUE, [SRC_UNIQUE, SRC_OTHER]) : null
+results.src.caseInsensitiveDup = t.buildSourceReference ? t.buildSourceReference(SRC, [SRC, SRC_DUP]) : null
+results.src.blankName = t.buildSourceReference ? t.buildSourceReference(SRC_BLANK, [SRC_BLANK]) : null
+results.src.tokenFallback = t.buildSourceReference ? t.buildSourceReference(SRC_ID_ONLY, [SRC_ID_ONLY]) : null
+results.src.unavailable = t.buildSourceReference ? t.buildSourceReference(SRC_NOTHING, [SRC_NOTHING]) : null
+
+// ---- 1.2 item references ----
+const ITEM_ACTIVE = { token: 'os_fd3445', name: 'hermes-desktop-ui-corrections', status: 'in-progress' }
+const ITEM_ARCHIVED = { token: 'os_fd3445', name: 'archived-change', status: 'archived' }
+const ITEM_IDEA = { token: 'os_1655dd', name: 'hermes-agentmail-inbox-integration', status: 'ideas' }
+const ITEM_NO_TOKEN = { name: 'no-token-change' }
+const ITEM_DUP_A = { token: 'os_dup', name: 'dup-a' }
+const ITEM_DUP_B = { token: 'os_dup', name: 'dup-b' }
+results.item = {}
+results.item.active = t.buildItemReference ? t.buildItemReference(SRC, ITEM_ACTIVE, [SRC]) : null
+results.item.archived = t.buildItemReference ? t.buildItemReference(SRC, ITEM_ARCHIVED, [SRC]) : null
+results.item.idea = t.buildItemReference ? t.buildItemReference(SRC, ITEM_IDEA, [SRC]) : null
+results.item.missingToken = t.buildItemReference ? t.buildItemReference(SRC, ITEM_NO_TOKEN, [SRC]) : null
+results.item.missingSourceRef = t.buildItemReference ? t.buildItemReference(SRC_NOTHING, ITEM_ACTIVE, [SRC]) : null
+results.item.literalNoEncoding = t.buildItemReference ? t.buildItemReference({ id: 'x', token: 'os_1', name: 'My Source' }, { token: 'tok/a b' }, [{ id: 'x', token: 'os_1', name: 'My Source' }]) : null
+results.item.uniqueToken = t.hasUniqueItemToken ? t.hasUniqueItemToken(ITEM_DUP_A, [ITEM_DUP_A]) : null
+results.item.duplicateToken = t.hasUniqueItemToken ? t.hasUniqueItemToken(ITEM_DUP_A, [ITEM_DUP_A, ITEM_DUP_B]) : null
+results.item.blankToken = t.hasUniqueItemToken ? t.hasUniqueItemToken({ token: '' }, []) : null
+
+// ---- 1.4 session store ----
+results.session = {}
+const freshStore = t.createSessionStore ? t.createSessionStore() : null
+results.session.defaultArchived = !!(freshStore && freshStore.showArchived === true)
+results.session.defaultSelected = !!(freshStore && freshStore.selectedSourceId === null)
+const contribs = []
+const regCtx = {
+  register: function(c) { contribs.push(c) },
+  registerMany: function(arr) { for (var i = 0; i < arr.length; i++) contribs.push(arr[i]) },
+  rest: function() { return Promise.resolve({}) }
+}
+plugin.register(regCtx)
+const route = contribs.find(function(c) { return c.area === 'routes' })
+const firstRender = route && typeof route.render === 'function' ? route.render() : null
+const storeA = firstRender && firstRender.props && firstRender.props.sessionStore
+results.session.storeWired = !!storeA
+if (storeA) {
+  storeA.selectedSourceId = 'os_retained'
+  storeA.showArchived = false
+  const secondRender = route.render()
+  const storeB = secondRender && secondRender.props && secondRender.props.sessionStore
+  results.session.sameStoreAcrossRenders = storeB === storeA
+  results.session.retainedMutated = !!(storeB && storeB.selectedSourceId === 'os_retained' && storeB.showArchived === false)
+}
+results.session.fallback = {}
+const FS = [ { id: 'a', valid: false, name: 'bad' }, { id: 'b', valid: true, name: 'good' } ]
+results.session.fallback.retainedPresentInvalid = t.resolveRetainedSource ? t.resolveRetainedSource(FS, 'a') : null
+results.session.fallback.retainedPresentValid = t.resolveRetainedSource ? t.resolveRetainedSource(FS, 'b') : null
+results.session.fallback.retainedAbsent = t.resolveRetainedSource ? t.resolveRetainedSource(FS, 'zzz') : null
+results.session.fallback.allInvalidFirstReturned = t.resolveRetainedSource ? t.resolveRetainedSource([{ id: 'x', valid: false }], 'zzz') : null
+results.session.fallback.noSources = t.resolveRetainedSource ? t.resolveRetainedSource([], 'zzz') : null
+
+// ---- 1.5 detail fallbacks + card descriptors ----
+results.detail = {}
+results.detail.titleLoaded = t.detailTitle ? t.detailTitle({ title: 'Loaded' }, { title: 'Summary' }, { name: 'Item' }, 'change') : null
+results.detail.titleSummary = t.detailTitle ? t.detailTitle({}, { title: 'Summary' }, { name: 'Item' }, 'change') : null
+results.detail.titleItem = t.detailTitle ? t.detailTitle({}, {}, { name: 'Item' }, 'change') : null
+results.detail.titleUntitledChange = t.detailTitle ? t.detailTitle({}, {}, {}, 'change') : null
+results.detail.titleUntitledIdea = t.detailTitle ? t.detailTitle({}, {}, {}, 'idea') : null
+results.detail.secondaryLoaded = t.detailSecondaryName ? t.detailSecondaryName({ name: 'Loaded' }, { name: 'Summary' }) : null
+results.detail.secondarySummary = t.detailSecondaryName ? t.detailSecondaryName({}, { name: 'Summary' }) : null
+results.detail.secondaryMissing = t.detailSecondaryName ? t.detailSecondaryName({}, {}) : null
+results.detail.ideaFilename = t.ideaSecondaryName ? t.ideaSecondaryName('hermes-agentmail-inbox-integration') : null
+results.detail.ideaFilenameNoDup = t.ideaSecondaryName ? t.ideaSecondaryName('already.md') : null
+results.detail.ideaFilenameMissing = t.ideaSecondaryName ? t.ideaSecondaryName('') : null
+
+const CARD_ITEM = { token: 'os_fd3445', name: 'hermes-desktop-ui-corrections', title: 'UI Fixes', status: 'in-progress', hasProposal: true, hasTasks: true, hasDesign: false, hasSpecs: true, taskStats: { done: 2, total: 5 }, sequence: 3 }
+const CARD_ALL = [CARD_ITEM, ITEM_IDEA]
+const cardNode = t.BoardCard ? t.BoardCard({ item: CARD_ITEM, source: SRC, allSources: [SRC], allItems: CARD_ALL, onSelect: function() {} }) : null
+results.card = {}
+if (cardNode) {
+  const cbs = collectButtons(cardNode)
+  results.card.copyCount = cbs.length
+  results.card.copyText = cbs[0] && cbs[0].text
+  results.card.copyLabel = cbs[0] && cbs[0].label
+  results.card.copyTitle = cbs[0] && cbs[0].title
+  results.card.copyStopProp = !!(cbs[0] && cbs[0].stopPropagation === true)
+  results.card.tabIndexZero = cardNode.props.tabIndex === 0
+  results.card.roleButton = cardNode.props.role === 'button'
+  results.card.hasKeyDown = typeof cardNode.props.onKeyDown === 'function'
+  results.card.rightGroupAuto = findByStyle(cardNode, 'marginLeft', 'auto').length > 0
+  results.card.tokenVisible = JSON.stringify(cardNode).includes('os_fd3445')
+  results.card.leftGroupHasArtifacts = (function() {
+    var found = false
+    walk(cardNode, function(n) { if (n.component && n.component.name === 'CardArtifacts') found = true })
+    return found
+  })()
+  results.card.leftGroupHasFraction = (function() {
+    var found = false
+    walk(cardNode, function(n) { if (n.component && n.component.name === 'CardTaskFraction') found = true })
+    return found
+  })()
+  results.card.taskFraction = t.CardTaskFraction ? JSON.stringify(t.CardTaskFraction({ item: CARD_ITEM })).includes('2/5 tasks') : null
+  results.card.leftBadges = t.CardArtifacts ? JSON.stringify(t.CardArtifacts({ item: CARD_ITEM })).includes('proposal') && JSON.stringify(t.CardArtifacts({ item: CARD_ITEM })).includes('tasks') : null
+  results.card.statusBorder = !!(cardNode.props.style && cardNode.props.style.borderLeftColor)
+}
+
+const SPARSE_ITEM = { token: 'os_x1', name: 'bare-card' }
+const sparseNode = t.BoardCard ? t.BoardCard({ item: SPARSE_ITEM, source: SRC, allSources: [SRC], allItems: [SPARSE_ITEM], onSelect: function() {} }) : null
+results.sparse = {}
+if (sparseNode) {
+  const scbs = collectButtons(sparseNode)
+  results.sparse.copyText = scbs[0] && scbs[0].text
+  results.sparse.noPlaceholderFraction = !JSON.stringify(sparseNode).includes('0/0')
+  results.sparse.rightGroupAuto = findByStyle(sparseNode, 'marginLeft', 'auto').length > 0
+  results.sparse.tokenVisible = JSON.stringify(sparseNode).includes('os_x1')
+}
+
+const dupNode = t.BoardCard ? t.BoardCard({ item: ITEM_DUP_A, source: SRC, allSources: [SRC], allItems: [ITEM_DUP_A, ITEM_DUP_B], onSelect: function() {} }) : null
+results.dupCard = {}
+if (dupNode) {
+  results.dupCard.copySuppressed = collectButtons(dupNode).length === 0
+  results.dupCard.tokenStillVisible = JSON.stringify(dupNode).includes('os_dup')
+}
+
+// ---- 1.6 keyboard + collapsed rail ----
+results.keyboard = {}
+let enterCount = 0, spaceCount = 0, otherCount = 0, spacePrevented = false
+if (t.handleActivateKey) {
+  t.handleActivateKey({ key: 'Enter', preventDefault: function() {} }, function() { enterCount++ })
+  t.handleActivateKey({ key: ' ', preventDefault: function() { spacePrevented = true } }, function() { spaceCount++ })
+  t.handleActivateKey({ key: 'a' }, function() { otherCount++ })
+}
+results.keyboard.enterActivatesOnce = enterCount === 1
+results.keyboard.spaceActivatesOnce = spaceCount === 1
+results.keyboard.spacePreventsDefault = spacePrevented === true
+results.keyboard.otherKeysIgnored = otherCount === 0
+
+const railNode = t.BoardColumn ? t.BoardColumn({ status: 'todo', items: [], source: SRC, allSources: [SRC], allItems: [], onSelect: function() {}, collapsed: true, onExpand: function() {} }) : null
+results.rail = {}
+if (railNode) {
+  results.rail.tabIndexZero = railNode.props.tabIndex === 0
+  results.rail.roleButton = railNode.props.role === 'button'
+  results.rail.hasKeyDown = typeof railNode.props.onKeyDown === 'function'
+  results.rail.dotTonePresent = JSON.stringify(railNode).includes('var(--ui-text-secondary)')
+}
+
+// ---- 1.4b retained-source restoration across the loading window ----
+// Executes the real OpenSpecPage body (not just descriptors) with controllable
+// useQuery/useState/useEffect shims to simulate the cold-cache remount sequence:
+//   mount with retained id while sourcesQuery.data is undefined (loading),
+//   then refreshed /sources data arrives.
+const shimHooks = globalThis.__openspecHooks = { hookIdx: 0, stateReg: [], effects: [], lastDeps: [] }
+const queryBox = globalThis.__openspecQuery = { data: undefined, isLoading: true, error: null }
+
+const sdkShim2 = [
+  'cn', 'Loader', 'EmptyState', 'ErrorState', 'Badge', 'Button',
+  'CopyButton', 'Dialog', 'DialogContent', 'Input', 'ScrollArea', 'SearchField',
+  'Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue',
+  'SegmentedControl', 'Tabs', 'TabsList', 'TabsTrigger'
+].map(n => 'export const ' + n + '=(...a)=>a').join(';')
+  + ';export const useQuery=(o)=>globalThis.__openspecQuery'
+  + ';export const ROUTES_AREA="routes"'
+  + ';export const SIDEBAR_NAV_AREA="sidebar.nav"'
+  + ';export default {}'
+const reactShim2 = 'export function useState(v){const i=globalThis.__openspecHooks.hookIdx++;if(globalThis.__openspecHooks.stateReg[i]===undefined)globalThis.__openspecHooks.stateReg[i]={v:v};const box=globalThis.__openspecHooks.stateReg[i];const set=function(nv){box.v=typeof nv==="function"?nv(box.v):nv};return[box.v,set]};'
+  + 'export function useEffect(f,d){globalThis.__openspecHooks.effects.push({f:f,d:d});return undefined};'
+  + 'export function useRef(v){return{current:v}};'
+  + 'export function useCallback(f,d){return f};'
+  + 'export function useMemo(f,d){return f()};'
+  + 'export function useContext(c){return undefined};'
+  + 'export default {useState:useState,useEffect:useEffect,useRef:useRef,useCallback:useCallback,useMemo:useMemo,useContext:useContext}'
+
+const sdkUrl2 = 'data:text/javascript,' + encodeURIComponent(sdkShim2)
+const reactUrl2 = 'data:text/javascript,' + encodeURIComponent(reactShim2)
+const blobSrc2 = pluginSrc
+  .replace(/from\\s+['"]@hermes\\/plugin-sdk['"]/g, "from '" + sdkUrl2 + "'")
+  .replace(/from\\s+['"]react\\/jsx-runtime['"]/g, "from '" + jsxUrl + "'")
+  .replace(/from\\s+['"]react['"]/g, "from '" + reactUrl2 + "'")
+
+results.mount = {}
+try {
+  const mod2 = await import('data:text/javascript,' + encodeURIComponent(blobSrc2))
+  const plugin2 = mod2.default
+  const contribs2 = []
+  plugin2.register({ register: function(c) { contribs2.push(c) }, registerMany: function(arr) { for (var i = 0; i < arr.length; i++) contribs2.push(arr[i]) }, rest: function() { return Promise.resolve({}) } })
+  const route2 = contribs2.find(function(c) { return c.area === 'routes' })
+  const page2 = route2.render()
+  const OpenSpecPage2 = page2.component
+  const api2 = {
+    sources: function() { return queryBox.data ? queryBox.data : { sources: [] } },
+    initSource: function() { return Promise.resolve({}) },
+    removeSource: function() { return Promise.resolve({}) },
+    updateSource: function() { return Promise.resolve({}) }
+  }
+
+  function sameDeps(a, b) {
+    if (a === b) return true
+    if (!a || !b || a.length !== b.length) return false
+    for (var i = 0; i < a.length; i++) { if (!Object.is(a[i], b[i])) return false }
+    return true
+  }
+  function renderPage(store) {
+    shimHooks.hookIdx = 0
+    const effStart = shimHooks.effects.length
+    const node = OpenSpecPage2({ api: api2, sessionStore: store })
+    for (var i = effStart; i < shimHooks.effects.length; i++) {
+      const e = shimHooks.effects[i]
+      const prev = shimHooks.lastDeps[i]
+      if (prev === undefined || !sameDeps(prev, e.d)) e.f()
+    }
+    shimHooks.lastDeps = shimHooks.effects.map(function(e) { return e.d })
+    return node
+  }
+  function mountSequence(retainedId, phases) {
+    shimHooks.hookIdx = 0; shimHooks.stateReg = []; shimHooks.effects = []; shimHooks.lastDeps = []
+    const store = t.createSessionStore()
+    store.selectedSourceId = retainedId
+    const out = {}
+    for (var p = 0; p < phases.length; p++) {
+      queryBox.data = phases[p].data
+      queryBox.isLoading = phases[p].isLoading !== false
+      queryBox.error = phases[p].error || null
+      const node = renderPage(store)
+      out['phase' + (p + 1)] = {
+        store: store.selectedSourceId,
+        state: shimHooks.stateReg[0] ? shimHooks.stateReg[0].v : undefined,
+        component: node && node.component ? (node.component.name || 'anon') : 'none'
+      }
+    }
+    return out
+  }
+
+  const SRC_A = { id: 'src-a', token: 'os_a', name: 'alpha', valid: false }
+  const SRC_B = { id: 'src-b', token: 'os_b', name: 'beta', valid: true }
+  const SRC_C = { id: 'src-c', token: 'os_c', name: 'gamma', valid: false }
+  const populated = { sources: [SRC_A, SRC_B] }
+  const populatedWithC = { sources: [SRC_A, SRC_B, SRC_C] }
+  const empty = { sources: [] }
+
+  // Retained valid source survives the loading window and stays selected.
+  results.mount.retainedValid = mountSequence('src-b', [
+    { data: undefined, isLoading: true }, { data: populated, isLoading: false }
+  ])
+  // Registered invalid source remains selected after data arrival.
+  results.mount.retainedInvalid = mountSequence('src-c', [
+    { data: undefined, isLoading: true }, { data: populatedWithC, isLoading: false }
+  ])
+  // Absent retained source falls back to first valid against the refreshed list.
+  results.mount.retainedAbsent = mountSequence('zzz', [
+    { data: undefined, isLoading: true }, { data: populated, isLoading: false }
+  ])
+  // Genuinely empty refreshed result resolves to null — only after data arrives.
+  results.mount.genuinelyEmpty = mountSequence('src-b', [
+    { data: undefined, isLoading: true }, { data: empty, isLoading: false }
+  ])
+} catch (e) {
+  results.mount.__error = (e && e.message ? e.message : String(e)).slice(0, 800)
+}
+
+console.log(JSON.stringify(results))
+`
+
+const identity = runIdentityDriver()
 
 // Contract checks
 console.log('  Plugin identity')
@@ -722,8 +1074,8 @@ console.log('\n[SDK] CopyButton contract: text prop, not value')
   var bcEnd = source.indexOf('\nfunction ', bcStart + 1)
   var bcSection = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
   check(bcSection.includes('stopPropagation: true'), 'BoardCard CopyButton has stopPropagation: true')
-  check(bcSection.includes('text: displayToken'), 'BoardCard CopyButton uses text prop (not value)')
-  check(!bcSection.includes('value: displayToken'), 'BoardCard CopyButton does not use value prop')
+  check(bcSection.includes('text: itemRef'), 'BoardCard CopyButton uses text prop (not value)')
+  check(!bcSection.includes('value: itemRef'), 'BoardCard CopyButton does not use value prop')
 }
 
 // Detail CopyButton should NOT have stopPropagation (not inside clickable card)
@@ -731,7 +1083,7 @@ console.log('\n[SDK] CopyButton contract: text prop, not value')
   var cdStart = source.indexOf('function ChangeDetailDialog')
   var cdEnd = source.indexOf('\nfunction ', cdStart + 1)
   var cdSection = source.slice(cdStart, cdEnd > 0 ? cdEnd : source.length)
-  check(cdSection.includes('text: token'), 'ChangeDetailDialog CopyButton uses text prop')
+  check(cdSection.includes('text: itemRef'), 'ChangeDetailDialog CopyButton uses text prop')
   check(!cdSection.includes('stopPropagation'), 'ChangeDetailDialog CopyButton does not set stopPropagation')
 }
 
@@ -942,6 +1294,247 @@ if (r.sourceMutation) {
   check(r.sourceMutation.needsInit === true, 'missing OpenSpec layout triggers initialization', JSON.stringify(r.sourceMutation.needsInit))
   check(r.sourceMutation.validNeedsNoInit === false, 'valid source does not trigger initialization', JSON.stringify(r.sourceMutation.validNeedsNoInit))
   check(!r.sourceMutation.error, 'No error in source mutation tests', r.sourceMutation.error)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Identity 1.1] Resolver-safe source references
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Identity 1.1] Resolver-safe source references')
+
+check(source.includes('function buildSourceReference'), 'buildSourceReference helper defined')
+check(source.includes('buildSourceReference: buildSourceReference'), 'buildSourceReference exported via __test')
+
+{
+  const s = identity && identity.src ? identity.src : {}
+  check(s.unique === 'ivault', 'Unique source name copies the vanity name', JSON.stringify(s.unique))
+  check(s.caseInsensitiveDup === 'os_8e5049', 'Case-insensitive duplicate name falls back to stable token', JSON.stringify(s.caseInsensitiveDup))
+  check(s.blankName === 'os_8e5049', 'Blank source name falls back to stable token', JSON.stringify(s.blankName))
+  check(s.tokenFallback === 'src-id-only', 'Missing name falls back to stable id', JSON.stringify(s.tokenFallback))
+  check(s.unavailable === '', 'Unavailable reference returns empty string (no malformed copy)', JSON.stringify(s.unavailable))
+}
+
+// Reference helpers never construct paths or encode
+{
+  const start = source.indexOf('function buildSourceReference')
+  const end = source.indexOf('function computeCollapsedSet')
+  const refSec = source.slice(start, end > start ? end : source.length)
+  check(refSec.length > 0, 'Reference helper section present')
+  check(!refSec.includes('.path'), 'Reference helpers never use source.path', refSec.includes('.path') ? 'found .path usage' : undefined)
+  check(!refSec.includes('encodeURIComponent'), 'Reference helpers perform no URL encoding')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Identity 1.2] Resolver-safe item references
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Identity 1.2] Resolver-safe item references')
+
+{
+  const it = identity && identity.item ? identity.item : {}
+  check(it.active === 'ivault/os_fd3445', 'Active change reference is source-qualified', JSON.stringify(it.active))
+  check(it.archived === 'ivault/os_fd3445', 'Archived change reference is identical (no archive segment)', JSON.stringify(it.archived))
+  check(it.idea === 'ivault/os_1655dd', 'Idea reference is source-qualified', JSON.stringify(it.idea))
+  check(it.missingToken === '', 'Missing item token produces no reference', JSON.stringify(it.missingToken))
+  check(it.missingSourceRef === '', 'Unavailable source reference produces no item reference', JSON.stringify(it.missingSourceRef))
+  check(it.literalNoEncoding === 'My Source/tok/a b', 'Names and tokens preserved literally without encoding', JSON.stringify(it.literalNoEncoding))
+  check(it.uniqueToken === true, 'Unique item token is copy-available', JSON.stringify(it.uniqueToken))
+  check(it.duplicateToken === false, 'Duplicate item token is not copy-available', JSON.stringify(it.duplicateToken))
+  check(it.blankToken === false, 'Blank item token is not copy-available', JSON.stringify(it.blankToken))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Session 1.4] Registration-scope navigation state
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Session 1.4] Registration-scope session store')
+
+{
+  const ses = identity && identity.session ? identity.session : {}
+  check(ses.defaultArchived === true, 'Fresh session store defaults Archived to true', JSON.stringify(ses.defaultArchived))
+  check(ses.defaultSelected === true, 'Fresh session store defaults selectedSourceId to null', JSON.stringify(ses.defaultSelected))
+  check(ses.storeWired === true, 'register() passes session store into route render', JSON.stringify(ses.storeWired))
+  check(ses.sameStoreAcrossRenders === true, 'Second route render reads same registration-scope store', JSON.stringify(ses.sameStoreAcrossRenders))
+  check(ses.retainedMutated === true, 'Store mutations survive route-local state discard', JSON.stringify(ses.retainedMutated))
+  const fb = ses.fallback || {}
+  check(fb.retainedPresentInvalid === 'a', 'Retained invalid source stays selected while registered', JSON.stringify(fb.retainedPresentInvalid))
+  check(fb.retainedPresentValid === 'b', 'Retained valid source stays selected', JSON.stringify(fb.retainedPresentValid))
+  check(fb.retainedAbsent === 'b', 'Absent retained source falls back to first valid', JSON.stringify(fb.retainedAbsent))
+  check(fb.allInvalidFirstReturned === 'x', 'All-invalid sources fall back to first returned', JSON.stringify(fb.allInvalidFirstReturned))
+  check(fb.noSources === null, 'No sources resolve to null selection', JSON.stringify(fb.noSources))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Session 1.4b] Retained-source restoration across the loading window
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Session 1.4b] Retained-source restoration across the loading window')
+
+{
+  const m = identity && identity.mount ? identity.mount : {}
+  check(m.__error === undefined, 'Mount-sequence simulation executed without driver error', m.__error || '')
+  const rv = m.retainedValid || {}
+  check(rv.phase1 && rv.phase1.store === 'src-b', 'Loading window does not wipe retained selection (store)', JSON.stringify(rv.phase1))
+  check(rv.phase1 && rv.phase1.state === 'src-b', 'Loading window does not wipe retained selection (state)', JSON.stringify(rv.phase1))
+  check(rv.phase1 && rv.phase1.component === 'Loader', 'Loading phase renders the loader', JSON.stringify(rv.phase1))
+  check(rv.phase2 && rv.phase2.store === 'src-b', 'Retained valid source survives remount after data arrival', JSON.stringify(rv.phase2))
+  check(rv.phase2 && rv.phase2.state === 'src-b', 'Retained valid source stays selected in React state', JSON.stringify(rv.phase2))
+  const ri = m.retainedInvalid || {}
+  check(ri.phase2 && ri.phase2.store === 'src-c', 'Registered invalid source remains selected after data arrival', JSON.stringify(ri.phase2))
+  check(ri.phase2 && ri.phase2.state === 'src-c', 'Registered invalid source stays selected in React state', JSON.stringify(ri.phase2))
+  const ra = m.retainedAbsent || {}
+  check(ra.phase2 && ra.phase2.store === 'src-b', 'Absent retained source falls back to first valid against refreshed list', JSON.stringify(ra.phase2))
+  check(ra.phase2 && ra.phase2.state === 'src-b', 'Absent-retained fallback lands in React state too', JSON.stringify(ra.phase2))
+  const ge = m.genuinelyEmpty || {}
+  check(ge.phase1 && ge.phase1.store === 'src-b', 'Retained id survives the loading render before empty result', JSON.stringify(ge.phase1))
+  check(ge.phase2 && ge.phase2.store === null, 'Genuinely empty refreshed result resolves to null selection', JSON.stringify(ge.phase2))
+  check(ge.phase2 && ge.phase2.state === null, 'Empty-result null resolution lands in React state too', JSON.stringify(ge.phase2))
+}
+
+// Static wiring — store created in register(), owned by OpenSpecPage
+{
+  const regStart = source.indexOf('register: function')
+  const regEnd = source.indexOf('\n}', regStart + 1)
+  const regSec = source.slice(regStart, regEnd > 0 ? regEnd : source.length)
+  check(regSec.includes('createSessionStore'), 'register() creates the session store')
+  check(regSec.includes('sessionStore'), 'register() passes session store to OpenSpecPage')
+}
+{
+  const ppStart = source.indexOf('function OpenSpecPage')
+  const ppEnd = source.indexOf('\nfunction ', ppStart + 1)
+  const ppSec = source.slice(ppStart, ppEnd > 0 ? ppEnd : source.length)
+  check(ppSec.includes('sessionStore.selectedSourceId'), 'OpenSpecPage initializes selection from session store')
+  check(ppSec.includes('sessionStore.showArchived'), 'OpenSpecPage initializes Archived from session store')
+  check(ppSec.includes('sessionStore.selectedSourceId ='), 'Explicit source selection writes session store')
+  check(ppSec.includes('sessionStore.showArchived ='), 'Archived toggle writes session store')
+  check(ppSec.includes('resolveRetainedSource'), 'OpenSpecPage applies retained-source fallback rules')
+  check(ppSec.includes('sourcesQuery.data === undefined'), 'Resolution effect is gated on data arrival (loading window safe)')
+  check(ppSec.includes('sourcesQuery.data, selectedSourceId'), 'Resolution effect re-runs when refreshed data arrives')
+  check(ppSec.includes('onToggleArchived'), 'WorkView receives controlled Archived toggle prop')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Identity 1.5] Copy controls, detail identity, footer layout
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Identity 1.5] Copy controls, detail identity, footer layout')
+
+{
+  const dt = identity && identity.detail ? identity.detail : {}
+  check(dt.titleLoaded === 'Loaded', 'Detail title prefers loaded detail title', JSON.stringify(dt.titleLoaded))
+  check(dt.titleSummary === 'Summary', 'Detail title falls back to selected summary title', JSON.stringify(dt.titleSummary))
+  check(dt.titleItem === 'Item', 'Detail title falls back to item name', JSON.stringify(dt.titleItem))
+  check(dt.titleUntitledChange === 'Untitled change', 'Change title falls back to "Untitled change"', JSON.stringify(dt.titleUntitledChange))
+  check(dt.titleUntitledIdea === 'Untitled idea', 'Idea title falls back to "Untitled idea"', JSON.stringify(dt.titleUntitledIdea))
+  check(dt.secondaryLoaded === 'Loaded', 'Secondary identity prefers loaded detail name', JSON.stringify(dt.secondaryLoaded))
+  check(dt.secondarySummary === 'Summary', 'Secondary identity falls back to summary name', JSON.stringify(dt.secondarySummary))
+  check(dt.secondaryMissing === '', 'Missing secondary identity is omitted', JSON.stringify(dt.secondaryMissing))
+  check(dt.ideaFilename === 'hermes-agentmail-inbox-integration.md', 'Idea secondary identity appends .md exactly once', JSON.stringify(dt.ideaFilename))
+  check(dt.ideaFilenameNoDup === 'already.md', 'Existing .md suffix is not duplicated', JSON.stringify(dt.ideaFilenameNoDup))
+  check(dt.ideaFilenameMissing === '', 'Missing idea identity is omitted', JSON.stringify(dt.ideaFilenameMissing))
+}
+
+{
+  const cd = identity && identity.card ? identity.card : {}
+  check(cd.copyCount === 1, 'Card renders exactly one copy control when available', JSON.stringify(cd.copyCount))
+  check(cd.copyText === 'ivault/os_fd3445', 'Card CopyButton.text equals canonical item reference', JSON.stringify(cd.copyText))
+  check(cd.copyLabel === 'Copy item reference', 'Card copy accessible label is "Copy item reference"', JSON.stringify(cd.copyLabel))
+  check(cd.copyTitle === 'ivault/os_fd3445', 'Card copy tooltip equals exact clipboard payload', JSON.stringify(cd.copyTitle))
+  check(cd.copyStopProp === true, 'Card copy stops propagation inside clickable card', JSON.stringify(cd.copyStopProp))
+  check(cd.rightGroupAuto === true, 'Identity group pinned lower-right with margin-left auto', JSON.stringify(cd.rightGroupAuto))
+  check(cd.tokenVisible === true, 'Short token visible as metadata on card', JSON.stringify(cd.tokenVisible))
+  check(cd.leftGroupHasArtifacts === true, 'Artifact badges occupy left footer group', JSON.stringify(cd.leftGroupHasArtifacts))
+  check(cd.leftGroupHasFraction === true, 'Task fraction occupies left footer group', JSON.stringify(cd.leftGroupHasFraction))
+  check(cd.leftBadges === true, 'Populated card renders proposal/tasks badges', JSON.stringify(cd.leftBadges))
+  check(cd.taskFraction === true, 'Task fraction stays in populated footer', JSON.stringify(cd.taskFraction))
+  check(cd.statusBorder === true, 'Status-colored border preserved on card', JSON.stringify(cd.statusBorder))
+}
+
+{
+  const sp = identity && identity.sparse ? identity.sparse : {}
+  check(sp.copyText === 'ivault/os_x1', 'Sparse card keeps canonical copy reference', JSON.stringify(sp.copyText))
+  check(sp.noPlaceholderFraction === true, 'Sparse footer has no placeholder task fraction', JSON.stringify(sp.noPlaceholderFraction))
+  check(sp.rightGroupAuto === true, 'Sparse identity group stays lower-right', JSON.stringify(sp.rightGroupAuto))
+  check(sp.tokenVisible === true, 'Sparse card keeps visible token metadata', JSON.stringify(sp.tokenVisible))
+}
+
+{
+  const dc = identity && identity.dupCard ? identity.dupCard : {}
+  check(dc.copySuppressed === true, 'Duplicate item token suppresses copy control', JSON.stringify(dc.copySuppressed))
+  check(dc.tokenStillVisible === true, 'Visible identity remains when copy suppressed', JSON.stringify(dc.tokenStillVisible))
+}
+
+// Detail dialogs and source header wiring
+{
+  const cdStart = source.indexOf('function ChangeDetailDialog')
+  const cdEnd = source.indexOf('\nfunction ', cdStart + 1)
+  const cdSec = source.slice(cdStart, cdEnd > 0 ? cdEnd : source.length)
+  check(cdSec.includes("'Copy item reference'"), 'Change detail copy label is "Copy item reference"')
+  check(cdSec.includes('buildItemReference'), 'Change detail uses canonical item reference')
+  check(cdSec.includes('hasUniqueItemToken'), 'Change detail guards copy on unique token')
+  check(cdSec.includes('detailTitle'), 'Change detail uses title fallback')
+  check(cdSec.includes('detailSecondaryName'), 'Change detail shows secondary folder identity')
+}
+{
+  const idStart = source.indexOf('function IdeaDetailDialog')
+  const idEnd = source.indexOf('\nfunction ', idStart + 1)
+  const idSec = source.slice(idStart, idEnd > 0 ? idEnd : source.length)
+  check(idSec.includes("'Copy item reference'"), 'Idea detail copy label is "Copy item reference"')
+  check(idSec.includes('ideaSecondaryName'), 'Idea detail appends .md exactly once')
+  check(idSec.includes('detailTitle'), 'Idea detail uses title fallback')
+}
+{
+  const ppStart = source.indexOf('function OpenSpecPage')
+  const ppEnd = source.indexOf('\nfunction ', ppStart + 1)
+  const ppSec = source.slice(ppStart, ppEnd > 0 ? ppEnd : source.length)
+  check(ppSec.includes("'Copy source reference'"), 'Source copy label is "Copy source reference"')
+  check(ppSec.includes('buildSourceReference'), 'Source header uses canonical source reference')
+  check(ppSec.includes('disabled:'), 'Unavailable source copy is disabled rather than malformed')
+  check(ppSec.includes('fontFamily: \'monospace\''), 'Short token renders in monospace metadata element')
+}
+check(!source.includes('navigator.clipboard'), 'No custom Clipboard API added (SDK CopyButton feedback retained)')
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [Interaction 1.6] Keyboard activation, hover/focus markers
+// ═══════════════════════════════════════════════════════════════════════════════
+console.log('\n[Interaction 1.6] Keyboard activation and interaction markers')
+
+{
+  const kb = identity && identity.keyboard ? identity.keyboard : {}
+  check(kb.enterActivatesOnce === true, 'Enter activates action once', JSON.stringify(kb.enterActivatesOnce))
+  check(kb.spaceActivatesOnce === true, 'Space activates action once on keydown', JSON.stringify(kb.spaceActivatesOnce))
+  check(kb.spacePreventsDefault === true, 'Space prevents default scrolling', JSON.stringify(kb.spacePreventsDefault))
+  check(kb.otherKeysIgnored === true, 'Unrelated keys do nothing', JSON.stringify(kb.otherKeysIgnored))
+}
+{
+  const cd = identity && identity.card ? identity.card : {}
+  check(cd.tabIndexZero === true, 'Card is keyboard-addressable (tabIndex 0)', JSON.stringify(cd.tabIndexZero))
+  check(cd.roleButton === true, 'Card has button semantics', JSON.stringify(cd.roleButton))
+  check(cd.hasKeyDown === true, 'Card wires keydown handler', JSON.stringify(cd.hasKeyDown))
+}
+{
+  const rl = identity && identity.rail ? identity.rail : {}
+  check(rl.tabIndexZero === true, 'Collapsed rail is keyboard-addressable (tabIndex 0)', JSON.stringify(rl.tabIndexZero))
+  check(rl.roleButton === true, 'Collapsed rail has button semantics', JSON.stringify(rl.roleButton))
+  check(rl.hasKeyDown === true, 'Collapsed rail wires keydown handler', JSON.stringify(rl.hasKeyDown))
+  check(rl.dotTonePresent === true, 'Status dot preserved on collapsed rail', JSON.stringify(rl.dotTonePresent))
+}
+// Static interaction markers — hover/focus-visible + shared handler + status preservation
+{
+  const bcStart = source.indexOf('function BoardCard')
+  const bcEnd = source.indexOf('\nfunction ', bcStart + 1)
+  const bcSec = source.slice(bcStart, bcEnd > 0 ? bcEnd : source.length)
+  check(bcSec.includes('focus-visible'), 'Card has focus-visible marker')
+  check(bcSec.includes('hover:'), 'Card has hover marker')
+  check(bcSec.includes('tabIndex: 0'), 'Card sets tabIndex 0')
+  check(bcSec.includes('onKeyDown'), 'Card wires onKeyDown')
+  check(bcSec.includes('handleActivateKey'), 'Card uses shared Enter/Space handler')
+  check(bcSec.includes('borderLeftColor: statusTone(status)'), 'Card keeps status-colored left border')
+}
+{
+  const colStart = source.indexOf('function BoardColumn')
+  const colEnd = source.indexOf('\nfunction ', colStart + 1)
+  const colSec = source.slice(colStart, colEnd > 0 ? colEnd : source.length)
+  check(colSec.includes('focus-visible'), 'Collapsed rail has focus-visible marker')
+  check(colSec.includes('tabIndex: 0'), 'Rail sets tabIndex 0')
+  check(colSec.includes('onKeyDown'), 'Rail wires onKeyDown')
+  check(colSec.includes('handleActivateKey'), 'Rail uses shared Enter/Space handler')
+  check(colSec.includes('backgroundColor: statusTone(status)'), 'Rail keeps status dot')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
