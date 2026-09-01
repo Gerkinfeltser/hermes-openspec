@@ -194,8 +194,105 @@ function findByStyle(node, styleKey, styleValue) {
   })
   return out
 }
+function hasVisibleText(value, text) {
+  if (value === text) return true
+  if (Array.isArray(value)) return value.some(function(child) { return hasVisibleText(child, text) })
+  if (value && typeof value === 'object') {
+    return hasVisibleText(value.props && value.props.children, text)
+  }
+  return false
+}
+function findButtonWithText(node, text) {
+  var found = null
+  walk(node, function(n) {
+    if (!found && n.component === sdkMod.Button && hasVisibleText(n.props && n.props.children, text)) found = n
+  })
+  return found
+}
+function nativeButtonKey(buttonProps, key) {
+  if (!buttonProps || buttonProps.type !== 'button' || typeof buttonProps.onClick !== 'function') return false
+  if (key !== 'Enter' && key !== ' ') return false
+  buttonProps.onClick({ type: 'click', detail: 0 })
+  return true
+}
 
 const results = {}
+
+// ---- 1.3 lane-header preference normalizer + registration storage ----
+results.lanePreference = {}
+if (t.normalizeLaneHeaderCollapseMode) {
+  results.lanePreference.normalizerExported = true
+  results.lanePreference.normalizerChevron = t.normalizeLaneHeaderCollapseMode('chevron-only')
+  results.lanePreference.normalizerFull = t.normalizeLaneHeaderCollapseMode('full-header')
+  results.lanePreference.normalizerMissing = t.normalizeLaneHeaderCollapseMode(undefined)
+  results.lanePreference.normalizerNull = t.normalizeLaneHeaderCollapseMode(null)
+  results.lanePreference.normalizerEmpty = t.normalizeLaneHeaderCollapseMode('')
+  results.lanePreference.normalizerUnknown = t.normalizeLaneHeaderCollapseMode('unknown')
+}
+function registerRouteWithStorage(backingMap) {
+  var contributions = []
+  var writes = []
+  var restCount = 0
+  var storage = {
+    get: function(key, fallback) {
+      return Object.prototype.hasOwnProperty.call(backingMap, key) ? backingMap[key] : fallback
+    },
+    set: function(key, value) {
+      backingMap[key] = value
+      writes.push({ key: key, value: value })
+    },
+  }
+  var ctx = {
+    register: function(c) { contributions.push(c) },
+    registerMany: function(arr) { for (var i = 0; i < arr.length; i++) contributions.push(arr[i]) },
+    storage: storage,
+    rest: function() { restCount++; return Promise.resolve({}) },
+  }
+  plugin.register(ctx)
+  return {
+    route: contributions.find(function(c) { return c.area === 'routes' }),
+    backingMap: backingMap,
+    writes: writes,
+    restCalls: function() { return restCount },
+  }
+}
+
+var absentRegistration = registerRouteWithStorage({})
+var absentProps = absentRegistration.route && absentRegistration.route.render().props
+results.lanePreference.absentDefaults = absentProps && absentProps.initialLaneHeaderCollapseMode
+results.lanePreference.absentRestCalls = absentRegistration.restCalls()
+
+var fullRegistration = registerRouteWithStorage({ laneHeaderCollapseMode: 'full-header' })
+var fullProps = fullRegistration.route && fullRegistration.route.render().props
+results.lanePreference.restoresFullHeader = fullProps && fullProps.initialLaneHeaderCollapseMode;
+(fullProps && typeof fullProps.persistLaneHeaderCollapseMode === 'function') && fullProps.persistLaneHeaderCollapseMode('full-header')
+results.lanePreference.fullWriteCount = fullRegistration.writes.length
+results.lanePreference.fullWrite = fullRegistration.writes[0]
+results.lanePreference.fullRestCalls = fullRegistration.restCalls()
+
+var chevronRegistration = registerRouteWithStorage({ laneHeaderCollapseMode: 'chevron-only' })
+var chevronProps = chevronRegistration.route && chevronRegistration.route.render().props
+results.lanePreference.restoresChevronOnly = chevronProps && chevronProps.initialLaneHeaderCollapseMode;
+(chevronProps && typeof chevronProps.persistLaneHeaderCollapseMode === 'function') && chevronProps.persistLaneHeaderCollapseMode('chevron-only')
+results.lanePreference.chevronWriteCount = chevronRegistration.writes.length
+results.lanePreference.chevronWrite = chevronRegistration.writes[0]
+results.lanePreference.chevronRestCalls = chevronRegistration.restCalls()
+
+var invalidRegistration = registerRouteWithStorage({ laneHeaderCollapseMode: 'not-valid' })
+var invalidProps = invalidRegistration.route && invalidRegistration.route.render().props
+results.lanePreference.invalidFallback = invalidProps && invalidProps.initialLaneHeaderCollapseMode
+results.lanePreference.invalidRestCalls = invalidRegistration.restCalls()
+
+var reloadBacking = {}
+var firstRegistration = registerRouteWithStorage(reloadBacking)
+var firstProps = firstRegistration.route && firstRegistration.route.render().props;
+(firstProps && typeof firstProps.persistLaneHeaderCollapseMode === 'function') && firstProps.persistLaneHeaderCollapseMode('chevron-only')
+var secondRegistration = registerRouteWithStorage(reloadBacking)
+var secondProps = secondRegistration.route && secondRegistration.route.render().props
+results.lanePreference.reloadRestores = secondProps && secondProps.initialLaneHeaderCollapseMode
+results.lanePreference.reloadWriteCount = firstRegistration.writes.length
+results.lanePreference.reloadWrite = firstRegistration.writes[0]
+results.lanePreference.reloadRestCalls = firstRegistration.restCalls() + secondRegistration.restCalls()
 
 // ---- 1.1 source references ----
 const SRC = { id: 'src-ivault', token: 'os_8e5049', name: 'ivault', path: '/repos/ivault' }
@@ -430,7 +527,8 @@ results.keyboard.spaceActivatesOnce = spaceCount === 1
 results.keyboard.spacePreventsDefault = spacePrevented === true
 results.keyboard.otherKeysIgnored = otherCount === 0
 
-const railNode = t.BoardColumn ? t.BoardColumn({ status: 'todo', items: [], source: SRC, allSources: [SRC], allItems: [], onSelect: function() {}, collapsed: true, onExpand: function() {} }) : null
+const railNode = t.BoardColumn ? t.BoardColumn({ status: 'todo', items: [], source: SRC, allSources: [SRC], allItems: [], onSelect: function() {}, collapsed: true, onExpand: function() {}, laneHeaderCollapseMode: 'full-header' }) : null
+const railChevronNode = t.BoardColumn ? t.BoardColumn({ status: 'todo', items: [], source: SRC, allSources: [SRC], allItems: [], onSelect: function() {}, collapsed: true, onExpand: function() {}, laneHeaderCollapseMode: 'chevron-only' }) : null
 results.rail = {}
 if (railNode) {
   results.rail.tabIndexZero = railNode.props.tabIndex === 0
@@ -468,6 +566,13 @@ if (railNode) {
     var cls = Array.isArray(cnv) ? cnv.join(' ') : String(cnv)
     return !cls.includes('focus-visible:outline-2') && !cls.includes('focus-visible:outline-(--ui-focus-border)')
   })()
+  results.rail.modeParity = !!(railChevronNode &&
+    railNode.props.role === railChevronNode.props.role &&
+    railNode.props.tabIndex === railChevronNode.props.tabIndex &&
+    railNode.props.title === railChevronNode.props.title &&
+    railNode.props['aria-label'] === railChevronNode.props['aria-label'] &&
+    railNode.props.className === railChevronNode.props.className &&
+    JSON.stringify(railNode) === JSON.stringify(railChevronNode))
 }
 
 // ---- lane/drawer interaction descriptors ----
@@ -484,12 +589,19 @@ if (t.BoardColumn) {
     onSelect: function() {},
     collapsed: false,
     onExpand: function() { activated++ },
+    laneHeaderCollapseMode: 'full-header',
   })
   var firstButton = null
+  var headerButtons = []
   walk(headerDescriptor, function(n) {
-    if (n.component === 'button' && !firstButton) firstButton = n
+    if (n.component === 'button') {
+      headerButtons.push(n)
+      if (!firstButton) firstButton = n
+    }
   })
   if (firstButton) {
+    results.expandedHeader.buttonCount = headerButtons.length
+    results.expandedHeader.noNestedInteractive = headerButtons.length === 1
     results.expandedHeader.rootIsButton = true
     results.expandedHeader.typeButton = firstButton.props && firstButton.props.type === 'button'
     results.expandedHeader.labelStartsCollapse = !!(firstButton.props && firstButton.props['aria-label'] && firstButton.props['aria-label'].startsWith('Collapse'))
@@ -528,6 +640,53 @@ if (t.BoardColumn) {
     activated = 0
     click()
     results.expandedHeader.clickActivatesOnce = activated === 1
+  }
+
+  let chevronActivated = 0
+  const chevronDescriptor = t.BoardColumn({
+    status: 'todo',
+    items: headerItems,
+    source: SRC,
+    allSources: [SRC],
+    allItems: headerItems,
+    onSelect: function() {},
+    collapsed: false,
+    onExpand: function() { chevronActivated++ },
+    laneHeaderCollapseMode: 'chevron-only',
+  })
+  const chevronHeader = chevronDescriptor && chevronDescriptor.props && chevronDescriptor.props.children && chevronDescriptor.props.children[0]
+  const chevronButtons = []
+  walk(chevronHeader, function(n) {
+    if (n.component === 'button') chevronButtons.push(n)
+  })
+  const chevronButton = chevronButtons[0]
+  results.chevronOnly = {}
+  results.chevronOnly.rootNotButton = !!(chevronDescriptor && chevronDescriptor.component === 'div')
+  results.chevronOnly.headerNonInteractive = !!(chevronHeader &&
+    typeof chevronHeader.props.onClick !== 'function' &&
+    typeof chevronHeader.props.onKeyDown !== 'function' &&
+    chevronHeader.props.tabIndex == null &&
+    chevronHeader.props.role == null)
+  results.chevronOnly.buttonCount = chevronButtons.length
+  results.chevronOnly.buttonType = !!(chevronButton && chevronButton.props.type === 'button')
+  results.chevronOnly.buttonLabel = chevronButton && chevronButton.props['aria-label']
+  results.chevronOnly.buttonTitle = chevronButton && chevronButton.props.title
+  results.chevronOnly.buttonFocusWash = !!(chevronButton && String(chevronButton.props.className || '').includes('focus-visible:bg-(--ui-control-hover-background)'))
+  results.chevronOnly.buttonNoKeyDown = !!(chevronButton && typeof chevronButton.props.onKeyDown !== 'function')
+  results.chevronOnly.buttonHasChevron = false
+  walk(chevronButton, function(n) {
+    if (n.component === sdkMod.Codicon && n.props && n.props.name === 'chevron-left') results.chevronOnly.buttonHasChevron = true
+  })
+  results.chevronOnly.contentClickNoOp = results.chevronOnly.headerNonInteractive && chevronActivated === 0
+  if (chevronButton && typeof chevronButton.props.onClick === 'function') {
+    chevronButton.props.onClick()
+    results.chevronOnly.clickActivatesOnce = chevronActivated === 1
+    chevronActivated = 0
+    chevronButton.props.onClick({ type: 'click', detail: 0 })
+    results.chevronOnly.enterActivatesOnce = chevronActivated === 1
+    chevronActivated = 0
+    chevronButton.props.onClick({ type: 'click', detail: 0 })
+    results.chevronOnly.spaceActivatesOnce = chevronActivated === 1
   }
 }
 
@@ -836,7 +995,7 @@ if (t.WorkView) {
   })
   let archivedButton = null
   walk(archivedBtnNode, function(n) {
-    if (n.component === sdkMod.Button && !archivedButton) archivedButton = n
+    if (n.component === sdkMod.Button && !archivedButton && hasVisibleText(n.props && n.props.children, 'Archived')) archivedButton = n
   })
   if (archivedButton) {
     const abProps = archivedButton.props
@@ -865,7 +1024,7 @@ if (t.WorkView) {
       onToggleArchived: function(v) { toggledTo = v }
     })
     let activeBtn = null
-    walk(activeNode, function(n) { if (n.component === sdkMod.Button && !activeBtn) activeBtn = n })
+    walk(activeNode, function(n) { if (n.component === sdkMod.Button && !activeBtn && hasVisibleText(n.props && n.props.children, 'Archived')) activeBtn = n })
     if (activeBtn) {
       const activeProps = activeBtn.props
       results.archivedButton.ariaPressedTrue = activeProps['aria-pressed'] === true
@@ -893,7 +1052,7 @@ if (t.WorkView) {
       onToggleArchived: function(v) { enterCalls++; enterValue = v }
     })
     let enterBtn = null
-    walk(enterNode, function(n) { if (n.component === sdkMod.Button && !enterBtn) enterBtn = n })
+    walk(enterNode, function(n) { if (n.component === sdkMod.Button && !enterBtn && hasVisibleText(n.props && n.props.children, 'Archived')) enterBtn = n })
     const enterActivated = nativeButtonKey(enterBtn && enterBtn.props, 'Enter')
     results.archivedButton.enterTogglesOnce = enterActivated && enterCalls === 1 && enterValue === true
 
@@ -905,9 +1064,73 @@ if (t.WorkView) {
       onToggleArchived: function(v) { spaceCalls++; spaceValue = v }
     })
     let spaceBtn = null
-    walk(spaceNode, function(n) { if (n.component === sdkMod.Button && !spaceBtn) spaceBtn = n })
+    walk(spaceNode, function(n) { if (n.component === sdkMod.Button && !spaceBtn && hasVisibleText(n.props && n.props.children, 'Archived')) spaceBtn = n })
     const spaceActivated = nativeButtonKey(spaceBtn && spaceBtn.props, ' ')
     results.archivedButton.spaceTogglesOnce = spaceActivated && spaceCalls === 1 && spaceValue === true
+  }
+
+  results.lanePreference.toggle = {}
+  if (t.WorkView) {
+    var fullToggleCalls = 0
+    var fullToggleValue = null
+    var fullToggleNode = t.WorkView({
+      api: {}, source: SRC_W, sources: [SRC_W], onSelectItem: function() {},
+      showArchived: false,
+      onToggleArchived: function() {},
+      laneHeaderCollapseMode: 'full-header',
+      onLaneHeaderCollapseModeChange: function(v) { fullToggleCalls++; fullToggleValue = v }
+    })
+    var fullToggle = findButtonWithText(fullToggleNode, 'Click header to collapse')
+    results.lanePreference.toggle.fullButton = !!fullToggle
+    results.lanePreference.toggle.fullVariant = !!(fullToggle && fullToggle.props.variant === 'outline')
+    results.lanePreference.toggle.fullSize = !!(fullToggle && fullToggle.props.size === 'sm')
+    results.lanePreference.toggle.fullType = !!(fullToggle && fullToggle.props.type === 'button')
+    results.lanePreference.toggle.fullPressed = !!(fullToggle && fullToggle.props['aria-pressed'] === true)
+    results.lanePreference.toggle.fullNoKeyDown = !!(fullToggle && typeof fullToggle.props.onKeyDown !== 'function')
+    if (fullToggle && typeof fullToggle.props.onClick === 'function') fullToggle.props.onClick()
+    results.lanePreference.toggle.fullClickOnce = fullToggleCalls === 1 && fullToggleValue === 'chevron-only'
+
+    var chevronToggleCalls = 0
+    var chevronToggleValue = null
+    var chevronToggleNode = t.WorkView({
+      api: {}, source: SRC_W, sources: [SRC_W], onSelectItem: function() {},
+      showArchived: false,
+      onToggleArchived: function() {},
+      laneHeaderCollapseMode: 'chevron-only',
+      onLaneHeaderCollapseModeChange: function(v) { chevronToggleCalls++; chevronToggleValue = v }
+    })
+    var chevronToggle = findButtonWithText(chevronToggleNode, 'Click header to collapse')
+    results.lanePreference.toggle.chevronButton = !!chevronToggle
+    results.lanePreference.toggle.chevronPressed = !!(chevronToggle && chevronToggle.props['aria-pressed'] === false)
+    results.lanePreference.toggle.chevronNoKeyDown = !!(chevronToggle && typeof chevronToggle.props.onKeyDown !== 'function')
+    if (chevronToggle && typeof chevronToggle.props.onClick === 'function') chevronToggle.props.onClick()
+    results.lanePreference.toggle.chevronClickOnce = chevronToggleCalls === 1 && chevronToggleValue === 'full-header'
+
+    var enterToggleCalls = 0
+    var enterToggleValue = null
+    var enterToggleNode = t.WorkView({
+      api: {}, source: SRC_W, sources: [SRC_W], onSelectItem: function() {},
+      showArchived: false,
+      onToggleArchived: function() {},
+      laneHeaderCollapseMode: 'full-header',
+      onLaneHeaderCollapseModeChange: function(v) { enterToggleCalls++; enterToggleValue = v }
+    })
+    var enterToggle = findButtonWithText(enterToggleNode, 'Click header to collapse')
+    var enterToggleActivated = nativeButtonKey(enterToggle && enterToggle.props, 'Enter')
+    results.lanePreference.toggle.enterActivatesOnce = enterToggleActivated && enterToggleCalls === 1 && enterToggleValue === 'chevron-only'
+
+    var spaceToggleCalls = 0
+    var spaceToggleValue = null
+    var spaceToggleNode = t.WorkView({
+      api: {}, source: SRC_W, sources: [SRC_W], onSelectItem: function() {},
+      showArchived: false,
+      onToggleArchived: function() {},
+      laneHeaderCollapseMode: 'chevron-only',
+      onLaneHeaderCollapseModeChange: function(v) { spaceToggleCalls++; spaceToggleValue = v }
+    })
+    var spaceToggle = findButtonWithText(spaceToggleNode, 'Click header to collapse')
+    var spaceToggleActivated = nativeButtonKey(spaceToggle && spaceToggle.props, ' ')
+    results.lanePreference.toggle.spaceActivatesOnce = spaceToggleActivated && spaceToggleCalls === 1 && spaceToggleValue === 'full-header'
   }
 }
 
@@ -944,6 +1167,42 @@ if (r.renderResult) {
 } else if (hasRender) {
   fail('render() execution', 'renderResult not captured')
 }
+
+console.log('\n[2.1] Lane-header collapse preference')
+var lp = identity.lanePreference || {}
+check(lp.normalizerExported === true, 'Exports lane-header mode normalizer')
+check(lp.normalizerChevron === 'chevron-only', 'Normalizes chevron-only mode', lp.normalizerChevron)
+check(lp.normalizerFull === 'full-header', 'Normalizes full-header mode', lp.normalizerFull)
+check(lp.normalizerMissing === 'full-header', 'Missing mode defaults to full-header', lp.normalizerMissing)
+check(lp.normalizerNull === 'full-header', 'Null mode defaults to full-header', lp.normalizerNull)
+check(lp.normalizerEmpty === 'full-header', 'Empty mode defaults to full-header', lp.normalizerEmpty)
+check(lp.normalizerUnknown === 'full-header', 'Unknown mode defaults to full-header', lp.normalizerUnknown)
+check(lp.absentDefaults === 'full-header', 'Absent storage defaults to full-header', lp.absentDefaults)
+check(lp.absentRestCalls === 0, 'Absent preference makes no REST calls', lp.absentRestCalls)
+check(lp.restoresFullHeader === 'full-header', 'Restores valid full-header preference', lp.restoresFullHeader)
+check(lp.restoresChevronOnly === 'chevron-only', 'Restores valid chevron-only preference', lp.restoresChevronOnly)
+check(lp.invalidFallback === 'full-header', 'Invalid stored mode falls back to full-header', lp.invalidFallback)
+check(lp.invalidRestCalls === 0, 'Invalid preference makes no REST calls', lp.invalidRestCalls)
+check(lp.fullWriteCount === 1, 'Full-header callback writes exactly once', lp.fullWriteCount)
+check(lp.fullWrite && lp.fullWrite.key === 'laneHeaderCollapseMode' && lp.fullWrite.value === 'full-header',
+  'Full-header callback writes exact storage key and value', JSON.stringify(lp.fullWrite))
+check(lp.chevronWriteCount === 1, 'Chevron-only callback writes exactly once', lp.chevronWriteCount)
+check(lp.chevronWrite && lp.chevronWrite.key === 'laneHeaderCollapseMode' && lp.chevronWrite.value === 'chevron-only',
+  'Chevron-only callback writes exact storage key and value', JSON.stringify(lp.chevronWrite))
+check(lp.fullRestCalls === 0 && lp.chevronRestCalls === 0, 'Preference callbacks make no REST calls',
+  'full=' + lp.fullRestCalls + ', chevron=' + lp.chevronRestCalls)
+check(lp.reloadRestores === 'chevron-only' && lp.reloadWriteCount === 1 && lp.reloadWrite &&
+  lp.reloadWrite.key === 'laneHeaderCollapseMode' && lp.reloadWrite.value === 'chevron-only',
+  'Stored mode survives plugin re-registration', JSON.stringify({ mode: lp.reloadRestores, write: lp.reloadWrite }))
+check(lp.reloadRestCalls === 0, 'Reload persistence path makes no REST calls', lp.reloadRestCalls)
+check(source.includes("var LANE_HEADER_COLLAPSE_MODE_KEY = 'laneHeaderCollapseMode'"),
+  'Uses exact lane-header storage key')
+check(source.includes('ctx.storage.get(LANE_HEADER_COLLAPSE_MODE_KEY, \'full-header\')'),
+  'Reads lane-header mode through ctx.storage')
+check(source.includes('initialLaneHeaderCollapseMode'), 'Routes the initial mode into the page')
+check(source.includes('persistLaneHeaderCollapseMode'), 'Routes the persistence callback into the page')
+check(source.includes('onLaneHeaderCollapseModeChange'), 'Routes mode changes through WorkView')
+check(source.includes('laneHeaderCollapseMode: laneHeaderCollapseMode'), 'Passes mode through rendered lane props')
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2.2 Path builder verification
@@ -2325,6 +2584,8 @@ if (r.__testAvailable) {
   const expandedHeader = identity.expandedHeader || {}
   console.log('  Expanded header descriptor')
   check(expandedHeader.rootIsButton === true, 'Expanded lane header root is a native button', JSON.stringify(expandedHeader.rootIsButton))
+  check(expandedHeader.buttonCount === 1 && expandedHeader.noNestedInteractive === true,
+    'Expanded lane header has exactly one native button and no nested interactive', JSON.stringify(expandedHeader))
   check(expandedHeader.typeButton === true, 'Expanded header button type is button', JSON.stringify(expandedHeader.typeButton))
   check(expandedHeader.labelStartsCollapse === true, 'Expanded header label starts with "Collapse"', JSON.stringify(expandedHeader.labelStartsCollapse))
   check(expandedHeader.hasChevronLeft === true, 'Expanded header renders chevron-left Codicon', JSON.stringify(expandedHeader.hasChevronLeft))
@@ -2337,6 +2598,43 @@ if (r.__testAvailable) {
   check(expandedHeader.focusWashExact === true, 'Expanded header descriptor exposes exact focus wash class', JSON.stringify(expandedHeader.focusWashExact))
 } else {
   fail('Expanded header activation behavior', '__test not available')
+}
+
+console.log('\n[Lane/drawer interaction] Chevron-only header and toggle')
+if (r.__testAvailable) {
+  const chevronOnly = identity.chevronOnly || {}
+  check(chevronOnly.rootNotButton === true, 'Chevron-only expanded lane root is not a button', JSON.stringify(chevronOnly.rootNotButton))
+  check(chevronOnly.headerNonInteractive === true && chevronOnly.contentClickNoOp === true,
+    'Chevron-only label/count/status content is non-interactive', JSON.stringify(chevronOnly))
+  check(chevronOnly.buttonCount === 1, 'Chevron-only mode has exactly one native collapse button', JSON.stringify(chevronOnly.buttonCount))
+  check(chevronOnly.buttonType === true, 'Chevron-only collapse target type is button', JSON.stringify(chevronOnly.buttonType))
+  check(typeof chevronOnly.buttonLabel === 'string' && chevronOnly.buttonLabel.startsWith('Collapse') && chevronOnly.buttonLabel.includes('Todo'),
+    'Chevron-only button label names the lane', JSON.stringify(chevronOnly.buttonLabel))
+  check(typeof chevronOnly.buttonTitle === 'string' && chevronOnly.buttonTitle.startsWith('Collapse'),
+    'Chevron-only button title names the collapse action', JSON.stringify(chevronOnly.buttonTitle))
+  check(chevronOnly.buttonHasChevron === true, 'Chevron-only button renders chevron-left Codicon', JSON.stringify(chevronOnly.buttonHasChevron))
+  check(chevronOnly.buttonNoKeyDown === true, 'Chevron-only button relies on native keyboard activation', JSON.stringify(chevronOnly.buttonNoKeyDown))
+  check(chevronOnly.buttonFocusWash === true, 'Chevron-only button exposes exact focus wash', JSON.stringify(chevronOnly.buttonFocusWash))
+  check(chevronOnly.clickActivatesOnce === true, 'Chevron-only chevron click collapses once', JSON.stringify(chevronOnly.clickActivatesOnce))
+  check(chevronOnly.enterActivatesOnce === true, 'Chevron-only Enter activates once', JSON.stringify(chevronOnly.enterActivatesOnce))
+  check(chevronOnly.spaceActivatesOnce === true, 'Chevron-only Space activates once', JSON.stringify(chevronOnly.spaceActivatesOnce))
+
+  const rail = identity.rail || {}
+  check(rail.modeParity === true, 'Collapsed rail behavior is identical in both header modes', JSON.stringify(rail.modeParity))
+
+  const toggle = (identity.lanePreference && identity.lanePreference.toggle) || {}
+  check(toggle.fullButton === true && toggle.fullVariant === true && toggle.fullSize === true && toggle.fullType === true,
+    'Header-mode toggle is one outlined small native button', JSON.stringify(toggle))
+  check(toggle.fullPressed === true && toggle.chevronPressed === true,
+    'Header-mode toggle aria-pressed reflects restored mode', JSON.stringify(toggle))
+  check(toggle.fullNoKeyDown === true && toggle.chevronNoKeyDown === true,
+    'Header-mode toggle relies on native keyboard activation', JSON.stringify(toggle))
+  check(toggle.fullClickOnce === true && toggle.chevronClickOnce === true,
+    'Header-mode toggle switches mode exactly once', JSON.stringify(toggle))
+  check(toggle.enterActivatesOnce === true && toggle.spaceActivatesOnce === true,
+    'Header-mode toggle activates once on native Enter and Space', JSON.stringify(toggle))
+} else {
+  fail('Chevron-only header and toggle behavior', '__test not available')
 }
 
 if (r.__testAvailable) {

@@ -112,6 +112,16 @@ function filterItems(items, query) {
 
 function toggleArchived(current) { return !current }
 
+var LANE_HEADER_COLLAPSE_MODE_KEY = 'laneHeaderCollapseMode'
+var LANE_HEADER_COLLAPSE_MODE_FULL = 'full-header'
+var LANE_HEADER_COLLAPSE_MODE_CHEVRON = 'chevron-only'
+
+function normalizeLaneHeaderCollapseMode(value) {
+  return value === LANE_HEADER_COLLAPSE_MODE_CHEVRON
+    ? LANE_HEADER_COLLAPSE_MODE_CHEVRON
+    : LANE_HEADER_COLLAPSE_MODE_FULL
+}
+
 function stripFrontmatter(content) {
   if (!content) return content
   return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
@@ -751,10 +761,11 @@ var COLUMN_LABELS = {
   'archived': 'Archived',
 }
 
-function BoardColumn({ status, items, source, allSources, allItems, onSelect, collapsed, onExpand }) {
+function BoardColumn({ status, items, source, allSources, allItems, onSelect, collapsed, onExpand, laneHeaderCollapseMode }) {
   var label = COLUMN_LABELS[status] || status
   var sorted = sortItems(items)
   var count = items.length
+  laneHeaderCollapseMode = normalizeLaneHeaderCollapseMode(laneHeaderCollapseMode)
 
   if (collapsed) {
     return jsx('div', {
@@ -776,8 +787,13 @@ function BoardColumn({ status, items, source, allSources, allItems, onSelect, co
     })
   }
 
-  return jsxs('div', { style: expandedStyle(), 'data-lane': status, children: [
-    jsxs('button', {
+  var headerContent = jsxs('span', { style: { display: 'flex', alignItems: 'center', gap: '6px' }, children: [
+    jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
+    jsx('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em' }, children: label }),
+    count > 0 ? jsx('span', { style: { fontSize: '12px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
+  ] })
+  var chevron = jsx('span', { style: { display: 'inline-flex', flexShrink: 0 }, children: jsx(Codicon, { name: 'chevron-left', size: '0.85rem' }) })
+  var collapseButton = jsx('button', {
       type: 'button',
       onClick: onExpand,
       title: 'Collapse ' + label,
@@ -787,16 +803,15 @@ function BoardColumn({ status, items, source, allSources, allItems, onSelect, co
         'focus-visible:bg-(--ui-control-hover-background)'
       ),
       style: { fontSize: 'inherit' },
-      onKeyDown: function(e) { handleActivateKey(e, onExpand) },
-      children: [
-        jsxs('span', { style: { display: 'flex', alignItems: 'center', gap: '6px' }, children: [
-          jsx('span', { style: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusTone(status), flexShrink: 0 } }),
-          jsx('span', { style: { fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: 'var(--ui-text-tertiary)', letterSpacing: '0.05em' }, children: label }),
-          count > 0 ? jsx('span', { style: { fontSize: '12px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' }, children: count }) : null,
-        ] }),
-        jsx('span', { style: { display: 'inline-flex', flexShrink: 0 }, children: jsx(Codicon, { name: 'chevron-left', size: '0.85rem' }) }),
-      ]
-    }),
+      onKeyDown: laneHeaderCollapseMode === LANE_HEADER_COLLAPSE_MODE_FULL ? function(e) { handleActivateKey(e, onExpand) } : undefined,
+      children: laneHeaderCollapseMode === LANE_HEADER_COLLAPSE_MODE_FULL ? [headerContent, chevron] : chevron,
+    })
+  var headerNode = laneHeaderCollapseMode === LANE_HEADER_COLLAPSE_MODE_CHEVRON
+    ? jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', paddingBottom: '8px' }, children: [headerContent, collapseButton] })
+    : collapseButton
+
+  return jsxs('div', { style: expandedStyle(), 'data-lane': status, children: [
+    headerNode,
     jsxs('div', { style: { flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }, children: sorted.map(function(item) {
       return jsx(BoardCard, {
         item: item,
@@ -1074,7 +1089,8 @@ function RawDiffView({ diff }) {
 // Work view
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function WorkView({ api, source, sources, onSelectItem, showArchived, onToggleArchived }) {
+function WorkView({ api, source, sources, onSelectItem, showArchived, onToggleArchived, laneHeaderCollapseMode, onLaneHeaderCollapseModeChange }) {
+  laneHeaderCollapseMode = normalizeLaneHeaderCollapseMode(laneHeaderCollapseMode)
   var ideas = (source.openspec && source.openspec.ideas) || []
   var changes = (source.openspec && source.openspec.changes) || []
   var allItems = ideas.map(function(idea) {
@@ -1117,6 +1133,11 @@ function WorkView({ api, source, sources, onSelectItem, showArchived, onToggleAr
       jsx('span', { style: { display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground, #888)', lineHeight: 1 }, title: 'Filter', 'aria-label': 'Filter', children: jsx(Codicon, { name: 'filter', size: '0.85rem' }) }),
       jsx(Input, { placeholder: 'title, token, or name...', value: filter, onChange: function(e) { setFilter(e.target.value) }, style: { flex: 1 } }),
       jsx(Button, { variant: 'outline', size: 'sm', type: 'button', 'aria-pressed': showArchived, style: { backgroundColor: showArchived ? 'var(--ui-control-active-background)' : undefined }, onClick: function() { onToggleArchived(!showArchived) }, children: [showArchived ? '\u2713' : null, ' ', 'Archived'] }),
+      jsx(Button, { variant: 'outline', size: 'sm', type: 'button', 'aria-pressed': laneHeaderCollapseMode === LANE_HEADER_COLLAPSE_MODE_FULL, 'aria-label': 'Click header to collapse', title: 'Click header to collapse', onClick: function() {
+        if (typeof onLaneHeaderCollapseModeChange === 'function') {
+          onLaneHeaderCollapseModeChange(laneHeaderCollapseMode === LANE_HEADER_COLLAPSE_MODE_FULL ? LANE_HEADER_COLLAPSE_MODE_CHEVRON : LANE_HEADER_COLLAPSE_MODE_FULL)
+        }
+      }, children: 'Click header to collapse' }),
     ] }),
     jsx('div', { style: { display: 'flex', gap: '8px', flex: 1, overflowX: 'auto', overflowY: 'hidden', minWidth: 0, minHeight: 0, paddingBottom: '8px' }, children: visibleStatuses.map(function(status) {
       var items = grouped[status] || []
@@ -1129,6 +1150,7 @@ function WorkView({ api, source, sources, onSelectItem, showArchived, onToggleAr
         onSelect: onSelectItem,
         collapsed: !!collapsedSet[status],
         onExpand: function() { toggleCollapse(status) },
+        laneHeaderCollapseMode: laneHeaderCollapseMode,
       }, status)
     }) }),
   ] })
@@ -1226,7 +1248,7 @@ function WorktreeDetailView({ sourceId, file, files }) {
 // Main page
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function OpenSpecPage({ api, sessionStore }) {
+function OpenSpecPage({ api, sessionStore, initialLaneHeaderCollapseMode, persistLaneHeaderCollapseMode }) {
   var sourcesQuery = useQuery({
     queryKey: ['openspec', 'sources'],
     queryFn: function() { return api.sources() },
@@ -1242,6 +1264,9 @@ function OpenSpecPage({ api, sessionStore }) {
   var [removeError, setRemoveError] = React.useState('')
   var [initBusy, setInitBusy] = React.useState(false)
   var [initError, setInitError] = React.useState('')
+  var [_laneHeaderCollapseMode, _setLaneHeaderCollapseMode] = React.useState(normalizeLaneHeaderCollapseMode(initialLaneHeaderCollapseMode))
+  var laneHeaderCollapseMode = _laneHeaderCollapseMode
+  var setLaneHeaderCollapseMode = _setLaneHeaderCollapseMode
 
   // Resolve selection after refreshed /sources data: restore the retained source
   // while its ID remains present (including invalid sources), otherwise fall back
@@ -1298,6 +1323,11 @@ function OpenSpecPage({ api, sessionStore }) {
   function handleToggleArchived(v) {
     setShowArchived(v)
     if (sessionStore) sessionStore.showArchived = v
+  }
+  function onLaneHeaderCollapseModeChange(mode) {
+    var next = normalizeLaneHeaderCollapseMode(mode)
+    setLaneHeaderCollapseMode(next)
+    if (typeof persistLaneHeaderCollapseMode === 'function') persistLaneHeaderCollapseMode(next)
   }
 
   if (sourcesQuery.isLoading) return jsx(Loader, { type: 'lemniscate-bloom' })
@@ -1413,7 +1443,7 @@ function OpenSpecPage({ api, sessionStore }) {
     // View body
     jsx('div', { style: { flex: 1, overflow: 'hidden', padding: '12px 16px' }, children: selectedSource && selectedSource.valid !== false ? (
       view === 'work'
-        ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sources: sources, showArchived: showArchived, onToggleArchived: handleToggleArchived, onSelectItem: onSelectItem })
+        ? jsx(WorkView, { key: selectedSource.id, api: api, source: selectedSource, sources: sources, showArchived: showArchived, onToggleArchived: handleToggleArchived, onSelectItem: onSelectItem, laneHeaderCollapseMode: laneHeaderCollapseMode, onLaneHeaderCollapseModeChange: onLaneHeaderCollapseModeChange })
         : jsx(SpecsView, { key: selectedSource.id, api: api, sourceId: selectedSource.id })
     ) : selectedSource && selectedSource.valid === false ? null : jsx(EmptyState, {
       title: sources.length === 0 ? 'No sources registered' : 'Select a source',
@@ -1451,12 +1481,23 @@ var plugin = {
   register: function(ctx) {
     var api = createApi(ctx)
     var sessionStore = createSessionStore()
+    var laneHeaderCollapseMode = normalizeLaneHeaderCollapseMode(
+      ctx.storage && typeof ctx.storage.get === 'function'
+        ? ctx.storage.get(LANE_HEADER_COLLAPSE_MODE_KEY, 'full-header')
+        : 'full-header'
+    )
+    function persistLaneHeaderCollapseMode(mode) {
+      laneHeaderCollapseMode = normalizeLaneHeaderCollapseMode(mode)
+      if (ctx.storage && typeof ctx.storage.set === 'function') {
+        ctx.storage.set(LANE_HEADER_COLLAPSE_MODE_KEY, laneHeaderCollapseMode)
+      }
+    }
     ctx.registerMany([
       {
         id: 'page',
         area: ROUTES_AREA,
         data: { path: '/openspec' },
-        render: function() { return jsx(OpenSpecPage, { api: api, sessionStore: sessionStore }) }
+        render: function() { return jsx(OpenSpecPage, { api: api, sessionStore: sessionStore, initialLaneHeaderCollapseMode: laneHeaderCollapseMode, persistLaneHeaderCollapseMode: persistLaneHeaderCollapseMode }) }
       },
       {
         id: 'nav',
@@ -1482,6 +1523,7 @@ export const __test = Object.freeze({
   sortItems: sortItems,
   filterItems: filterItems,
   toggleArchived: toggleArchived,
+  normalizeLaneHeaderCollapseMode: normalizeLaneHeaderCollapseMode,
   parseTasks: parseTasks,
   renderMarkdown: renderMarkdown,
   classifyState: classifyState,
